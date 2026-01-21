@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from src.memory.episodic.crud import store_memory, retrieve_memories
-from src.memory.semantic.crud import store_fact, retrieve_facts
-from src.memory.procedural.crud import store_procedure, retrieve_procedures, update_procedure_success_rate
+from src.memory.episodic.crud import store_memory, retrieve_memories, forget_old_memories, forget_low_relevance_memories
+from src.memory.semantic.crud import store_fact, retrieve_facts, forget_low_confidence_facts
+from src.memory.procedural.crud import store_procedure, retrieve_procedures, update_procedure_success_rate, forget_low_success_procedures
 
 app = FastAPI(
     title="ThinkingMemory API",
@@ -103,5 +103,37 @@ async def retrieve_procedures_endpoint(agent_id: str, limit: int = 10):
 async def update_procedure_endpoint(procedure_id: int, request: ProcedureUpdateRequest):
     try:
         return update_procedure_success_rate(procedure_id, request.success_rate)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memory/forget/old/{agent_id}")
+async def forget_old_memories_endpoint(agent_id: str, days: int = 30):
+    try:
+        deleted_count = forget_old_memories(agent_id, days)
+        return {"message": f"Deleted {deleted_count} old memories for agent {agent_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memory/forget/low-relevance/{agent_id}")
+async def forget_low_relevance_memories_endpoint(agent_id: str, relevance_threshold: float = 0.5):
+    try:
+        deleted_count = forget_low_relevance_memories(agent_id, relevance_threshold)
+        return {"message": f"Deleted {deleted_count} low-relevance memories for agent {agent_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/semantic/forget/low-confidence/{agent_id}")
+async def forget_low_confidence_facts_endpoint(agent_id: str, confidence_threshold: float = 0.5):
+    try:
+        deleted_count = forget_low_confidence_facts(agent_id, confidence_threshold)
+        return {"message": f"Deleted {deleted_count} low-confidence facts for agent {agent_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/procedural/forget/low-success/{agent_id}")
+async def forget_low_success_procedures_endpoint(agent_id: str, success_threshold: float = 0.5):
+    try:
+        deleted_count = forget_low_success_procedures(agent_id, success_threshold)
+        return {"message": f"Deleted {deleted_count} low-success procedures for agent {agent_id}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

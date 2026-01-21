@@ -1,4 +1,4 @@
-from sqlmodel import select
+from sqlmodel import select, delete
 from src.memory.procedural.models import Procedure
 from src.memory.procedural.database import get_session
 
@@ -30,3 +30,14 @@ def update_procedure_success_rate(procedure_id: int, success_rate: float):
             session.commit()
             session.refresh(procedure)
         return procedure
+
+def forget_low_success_procedures(agent_id: str, success_threshold: float = 0.5):
+    """Delete procedures with success rate below the threshold."""
+    with next(get_session()) as session:
+        statement = delete(Procedure).where(
+            Procedure.agent_id == agent_id,
+            Procedure.success_rate < success_threshold
+        )
+        result = session.exec(statement)
+        session.commit()
+        return result.rowcount
