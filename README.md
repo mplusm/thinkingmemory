@@ -18,20 +18,45 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
 - Redis 7+
 
 ### Installation
-```bash
-git clone https://github.com/mplusm/thinkingmemory.git
-cd thinkingmemory
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mplusm/thinkingmemory.git
+   cd thinkingmemory
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Set up environment variables:
+   - Create a `.env` file in the project root:
+     ```bash
+     cp .env.example .env
+     ```
+   - Edit `.env` to include your database credentials:
+     ```plaintext
+     DATABASE_URL=postgresql://memory_user:your_password@localhost:5432/thinkingmemory
+     ```
 
 ### Quickstart
-1. Start the API:
+1. Initialize the database:
+   ```bash
+   python src/memory/episodic/database.py
+   ```
+
+2. Start the API:
    ```bash
    uvicorn src.api.main:app --reload
    ```
-2. Store a memory:
+
+3. Store a memory:
    ```bash
    curl -X POST http://localhost:8000/memory/store -H "Content-Type: application/json" -d '{
      "agent_id": "agent-123",
@@ -39,6 +64,19 @@ pip install -r requirements.txt
      "content": {"goal": "Test memory", "outcome": "Success"}
    }'
    ```
+
+4. Retrieve memories:
+   ```bash
+   curl -X GET http://localhost:8000/memory/retrieve/agent-123
+   ```
+
+## Environment Variables
+The following environment variables can be set in a `.env` file:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL database URL | `postgresql://memory_user:your_password@localhost:5432/thinkingmemory` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
 
 ## License
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
