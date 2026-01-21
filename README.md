@@ -53,21 +53,20 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
 
 2. Start the API:
    ```bash
-   uvicorn src.api.main:app --reload
+   uvicorn src.api.main:app --reload --port 8091
    ```
 
 3. Store a memory:
    ```bash
-   curl -X POST http://localhost:8000/memory/store -H "Content-Type: application/json" -d '{
+   curl -X POST http://localhost:8091/memory/store -H "Content-Type: application/json" -d '{
      "agent_id": "agent-123",
-     "memory_type": "episodic",
      "content": {"goal": "Test memory", "outcome": "Success"}
    }'
    ```
 
 4. Retrieve memories:
    ```bash
-   curl -X GET http://localhost:8000/memory/retrieve/agent-123
+   curl -X GET http://localhost:8091/memory/retrieve/agent-123
    ```
 
 ## Environment Variables
