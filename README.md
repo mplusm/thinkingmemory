@@ -104,6 +104,26 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
    }'
    ```
 
+10. Forget old memories:
+    ```bash
+    curl -X DELETE "http://localhost:8091/memory/forget/old/agent-123?days=30"
+    ```
+
+11. Forget low-relevance memories:
+    ```bash
+    curl -X DELETE "http://localhost:8091/memory/forget/low-relevance/agent-123?relevance_threshold=0.5"
+    ```
+
+12. Forget low-confidence facts:
+    ```bash
+    curl -X DELETE "http://localhost:8091/semantic/forget/low-confidence/agent-123?confidence_threshold=0.5"
+    ```
+
+13. Forget low-success procedures:
+    ```bash
+    curl -X DELETE "http://localhost:8091/procedural/forget/low-success/agent-123?success_threshold=0.5"
+    ```
+
 ## Environment Variables
 The following environment variables can be set in a `.env` file:
 
