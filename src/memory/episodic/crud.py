@@ -2,7 +2,13 @@ from sqlmodel import select
 from src.memory.episodic.models import MemoryItem
 from src.memory.episodic.database import get_session
 
-def store_memory(item: MemoryItem):
+def store_memory(agent_id: str, content: dict, embedding: list[float] = None, extra_data: dict = None):
+    item = MemoryItem(
+        agent_id=agent_id,
+        content=content,
+        embedding=embedding,
+        extra_data=extra_data
+    )
     with next(get_session()) as session:
         session.add(item)
         session.commit()

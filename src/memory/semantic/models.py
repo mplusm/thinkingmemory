@@ -3,11 +3,11 @@ from typing import Optional
 from datetime import datetime
 from sqlalchemy import JSON
 
-class MemoryItem(SQLModel, table=True):
+class Fact(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     agent_id: str
-    memory_type: str = "episodic"
-    content: dict = Field(sa_type=JSON)
+    fact: str
     embedding: Optional[list[float]] = Field(default=None, sa_type=JSON)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    extra_data: Optional[dict] = Field(default=None, sa_type=JSON)
+    confidence: float = Field(default=1.0)
+    source: Optional[str] = None

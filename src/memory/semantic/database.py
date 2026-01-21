@@ -1,5 +1,5 @@
 from sqlmodel import create_engine, Session, SQLModel
-from src.memory.episodic.models import MemoryItem
+from src.memory.semantic.models import Fact
 from dotenv import load_dotenv
 import os
 
