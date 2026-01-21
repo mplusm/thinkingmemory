@@ -69,6 +69,41 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
    curl -X GET http://localhost:8091/memory/retrieve/agent-123
    ```
 
+5. Store a fact:
+   ```bash
+   curl -X POST http://localhost:8091/semantic/store -H "Content-Type: application/json" -d '{
+     "agent_id": "agent-123",
+     "fact": "The sky is blue",
+     "confidence": 0.95
+   }'
+   ```
+
+6. Retrieve facts:
+   ```bash
+   curl -X GET http://localhost:8091/semantic/retrieve/agent-123
+   ```
+
+7. Store a procedure:
+   ```bash
+   curl -X POST http://localhost:8091/procedural/store -H "Content-Type: application/json" -d '{
+     "agent_id": "agent-123",
+     "name": "Test Procedure",
+     "steps": [{"step": 1, "action": "Do something"}]
+   }'
+   ```
+
+8. Retrieve procedures:
+   ```bash
+   curl -X GET http://localhost:8091/procedural/retrieve/agent-123
+   ```
+
+9. Update procedure success rate:
+   ```bash
+   curl -X PATCH http://localhost:8091/procedural/update/1 -H "Content-Type: application/json" -d '{
+     "success_rate": 0.95
+   }'
+   ```
+
 ## Environment Variables
 The following environment variables can be set in a `.env` file:
 
