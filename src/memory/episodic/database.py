@@ -1,7 +1,11 @@
 from sqlmodel import create_engine, Session
 from src.memory.episodic.models import MemoryItem
+from dotenv import load_dotenv
+import os
 
-DATABASE_URL = "postgresql://memory_user:postgres#2026@localhost:5432/thinkingmemory"
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://memory_user:postgres#2026@localhost:5432/thinkingmemory")
 
 engine = create_engine(DATABASE_URL)
 
