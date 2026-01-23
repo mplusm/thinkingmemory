@@ -2,6 +2,9 @@ from sqlmodel import select, delete
 from src.memory.episodic.models import MemoryItem
 from src.memory.episodic.database import get_session
 from datetime import datetime, timedelta
+from sqlalchemy import func
+from pgvector.sqlalchemy import Vector
+import numpy as np
 
 def store_memory(agent_id: str, content: dict, embedding: list[float] = None, extra_data: dict = None):
     item = MemoryItem(
@@ -16,10 +19,21 @@ def store_memory(agent_id: str, content: dict, embedding: list[float] = None, ex
         session.refresh(item)
         return item
 
-def retrieve_memories(agent_id: str, limit: int = 10):
+def retrieve_memories(agent_id: str, limit: int = 10, track_access: bool = True):
+    """Retrieve recent memories and optionally track access for relevance scoring."""
     with next(get_session()) as session:
-        statement = select(MemoryItem).where(MemoryItem.agent_id == agent_id).limit(limit)
-        return session.exec(statement).all()
+        statement = select(MemoryItem).where(MemoryItem.agent_id == agent_id).order_by(
+            MemoryItem.timestamp.desc()
+        ).limit(limit)
+        memories = session.exec(statement).all()
+
+        if track_access:
+            for memory in memories:
+                memory.access_count += 1
+                memory.last_accessed = datetime.utcnow()
+            session.commit()
+
+        return memories
 
 def forget_old_memories(agent_id: str, days: int = 30):
     """Delete memories older than `days` for a specific agent."""
@@ -33,8 +47,185 @@ def forget_old_memories(agent_id: str, days: int = 30):
         session.commit()
         return result.rowcount
 
-def forget_low_relevance_memories(agent_id: str, relevance_threshold: float = 0.5):
-    """Delete memories with low relevance (placeholder for future implementation)."""
-    # Placeholder: In a real implementation, you would filter based on relevance scores.
-    # For now, we'll just return 0 as no memories are deleted.
-    return 0
+def forget_low_relevance_memories(agent_id: str, min_access_count: int = 1, days_since_access: int = 7):
+    """
+    Delete memories with low relevance based on access patterns.
+
+    Relevance is determined by:
+    - access_count: How many times the memory has been retrieved
+    - last_accessed: When the memory was last accessed
+
+    Memories are deleted if:
+    - access_count < min_access_count AND
+    - last_accessed is None OR last_accessed > days_since_access ago
+    """
+    cutoff_date = datetime.utcnow() - timedelta(days=days_since_access)
+    with next(get_session()) as session:
+        statement = delete(MemoryItem).where(
+            MemoryItem.agent_id == agent_id,
+            MemoryItem.access_count < min_access_count,
+            (MemoryItem.last_accessed.is_(None)) | (MemoryItem.last_accessed < cutoff_date)
+        )
+        result = session.exec(statement)
+        session.commit()
+        return result.rowcount
+
+def retrieve_similar_memories(agent_id: str, embedding: list[float], limit: int = 10, similarity_threshold: float = 0.5, track_access: bool = True):
+    """Retrieve memories similar to the given embedding and track access."""
+    with next(get_session()) as session:
+        statement = select(MemoryItem).where(
+            MemoryItem.agent_id == agent_id,
+            MemoryItem.embedding.isnot(None)
+        ).order_by(
+            func.l2_distance(MemoryItem.embedding, embedding)
+        ).limit(limit)
+        memories = session.exec(statement).all()
+
+        if track_access:
+            for memory in memories:
+                memory.access_count += 1
+                memory.last_accessed = datetime.utcnow()
+            session.commit()
+
+        return memories
+
+def compress_similar_memories(agent_id: str, similarity_threshold: float = 0.3, min_cluster_size: int = 3):
+    """
+    Compress similar memories into consolidated entries.
+
+    This function:
+    1. Finds clusters of similar memories based on embedding distance
+    2. Creates a compressed memory that represents the cluster
+    3. Marks original memories as compressed (keeping them for audit trail)
+
+    Returns the number of compressed memories created.
+    """
+    with next(get_session()) as session:
+        # Get all uncompressed memories with embeddings
+        statement = select(MemoryItem).where(
+            MemoryItem.agent_id == agent_id,
+            MemoryItem.embedding.isnot(None),
+            MemoryItem.is_compressed == False
+        ).order_by(MemoryItem.timestamp.desc())
+        memories = session.exec(statement).all()
+
+        if len(memories) < min_cluster_size:
+            return 0
+
+        # Simple clustering: group memories by similarity
+        clusters = []
+        used_ids = set()
+
+        for i, memory in enumerate(memories):
+            if memory.id in used_ids:
+                continue
+
+            cluster = [memory]
+            used_ids.add(memory.id)
+
+            # Find similar memories
+            for j, other_memory in enumerate(memories):
+                if other_memory.id in used_ids:
+                    continue
+
+                # Calculate L2 distance between embeddings
+                if memory.embedding and other_memory.embedding:
+                    dist = np.linalg.norm(
+                        np.array(list(memory.embedding)) - np.array(list(other_memory.embedding))
+                    )
+                    if dist < similarity_threshold:
+                        cluster.append(other_memory)
+                        used_ids.add(other_memory.id)
+
+            if len(cluster) >= min_cluster_size:
+                clusters.append(cluster)
+
+        # Create compressed memories for each cluster
+        compressed_count = 0
+        for cluster in clusters:
+            # Aggregate content from cluster
+            aggregated_content = {
+                "type": "compressed",
+                "original_count": len(cluster),
+                "summary": [m.content for m in cluster],
+                "time_range": {
+                    "start": min(m.timestamp for m in cluster).isoformat(),
+                    "end": max(m.timestamp for m in cluster).isoformat()
+                }
+            }
+
+            # Average the embeddings
+            embeddings = [list(m.embedding) for m in cluster if m.embedding]
+            avg_embedding = np.mean(embeddings, axis=0).tolist() if embeddings else None
+
+            # Sum access counts
+            total_access = sum(m.access_count for m in cluster)
+
+            # Create compressed memory
+            compressed_memory = MemoryItem(
+                agent_id=agent_id,
+                memory_type="episodic_compressed",
+                content=aggregated_content,
+                embedding=avg_embedding,
+                extra_data={"compression_date": datetime.utcnow().isoformat()},
+                access_count=total_access,
+                is_compressed=False,
+                source_memory_ids=[m.id for m in cluster]
+            )
+            session.add(compressed_memory)
+
+            # Mark original memories as compressed
+            for memory in cluster:
+                memory.is_compressed = True
+
+            compressed_count += 1
+
+        session.commit()
+        return compressed_count
+
+def delete_compressed_originals(agent_id: str):
+    """
+    Delete original memories that have been compressed.
+    Call this after compression to free up space.
+    """
+    with next(get_session()) as session:
+        statement = delete(MemoryItem).where(
+            MemoryItem.agent_id == agent_id,
+            MemoryItem.is_compressed == True
+        )
+        result = session.exec(statement)
+        session.commit()
+        return result.rowcount
+
+def get_memory_stats(agent_id: str):
+    """Get statistics about an agent's memories."""
+    with next(get_session()) as session:
+        total = session.exec(
+            select(func.count(MemoryItem.id)).where(MemoryItem.agent_id == agent_id)
+        ).one()
+
+        compressed = session.exec(
+            select(func.count(MemoryItem.id)).where(
+                MemoryItem.agent_id == agent_id,
+                MemoryItem.is_compressed == True
+            )
+        ).one()
+
+        with_embeddings = session.exec(
+            select(func.count(MemoryItem.id)).where(
+                MemoryItem.agent_id == agent_id,
+                MemoryItem.embedding.isnot(None)
+            )
+        ).one()
+
+        avg_access = session.exec(
+            select(func.avg(MemoryItem.access_count)).where(MemoryItem.agent_id == agent_id)
+        ).one()
+
+        return {
+            "total_memories": total,
+            "compressed_memories": compressed,
+            "active_memories": total - compressed,
+            "memories_with_embeddings": with_embeddings,
+            "average_access_count": float(avg_access) if avg_access else 0.0
+        }
