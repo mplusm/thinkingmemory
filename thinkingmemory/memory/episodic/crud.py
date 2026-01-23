@@ -23,6 +23,24 @@ def _apply_tenant_filter(statement, model, tenant_id: Optional[str]):
     return statement
 
 
+def _memory_to_dict(memory: MemoryItem) -> dict:
+    """Convert a MemoryItem to a serializable dict."""
+    return {
+        "id": memory.id,
+        "tenant_id": memory.tenant_id,
+        "agent_id": memory.agent_id,
+        "memory_type": memory.memory_type,
+        "content": memory.content,
+        "embedding": list(memory.embedding) if memory.embedding else None,
+        "timestamp": memory.timestamp,
+        "extra_data": memory.extra_data,
+        "access_count": memory.access_count,
+        "last_accessed": memory.last_accessed,
+        "is_compressed": memory.is_compressed,
+        "source_memory_ids": memory.source_memory_ids,
+    }
+
+
 def store_memory(
     agent_id: str,
     content: dict,
@@ -45,7 +63,8 @@ def store_memory(
         session.add(item)
         session.commit()
         session.refresh(item)
-        return item
+        # Convert to dict before session closes
+        return _memory_to_dict(item)
 
 
 def retrieve_memories(
@@ -68,7 +87,8 @@ def retrieve_memories(
                 memory.last_accessed = datetime.utcnow()
             session.commit()
 
-        return memories
+        # Convert to dicts before session closes to avoid DetachedInstanceError
+        return [_memory_to_dict(m) for m in memories]
 
 
 def forget_old_memories(agent_id: str, days: int = 30, tenant_id: Optional[str] = None):
@@ -146,7 +166,8 @@ def retrieve_similar_memories(
                 memory.last_accessed = datetime.utcnow()
             session.commit()
 
-        return memories
+        # Convert to dicts before session closes
+        return [_memory_to_dict(m) for m in memories]
 
 
 def compress_similar_memories(

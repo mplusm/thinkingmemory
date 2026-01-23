@@ -14,6 +14,22 @@ from thinkingmemory.core.database import get_session_context
 from thinkingmemory.memory.procedural.models import Procedure
 
 
+def _procedure_to_dict(procedure: Procedure) -> dict:
+    """Convert a Procedure to a serializable dict."""
+    return {
+        "id": procedure.id,
+        "tenant_id": procedure.tenant_id,
+        "agent_id": procedure.agent_id,
+        "name": procedure.name,
+        "description": procedure.description,
+        "steps": procedure.steps,
+        "embedding": list(procedure.embedding) if procedure.embedding else None,
+        "success_rate": procedure.success_rate,
+        "timestamp": procedure.timestamp,
+        "version": procedure.version,
+    }
+
+
 def store_procedure(
     agent_id: str,
     name: str,
@@ -39,7 +55,8 @@ def store_procedure(
         session.add(procedure)
         session.commit()
         session.refresh(procedure)
-        return procedure
+        # Convert to dict before session closes
+        return _procedure_to_dict(procedure)
 
 
 def retrieve_procedures(agent_id: str, limit: int = 10, tenant_id: Optional[str] = None):
@@ -49,7 +66,9 @@ def retrieve_procedures(agent_id: str, limit: int = 10, tenant_id: Optional[str]
         if tenant_id is not None:
             statement = statement.where(Procedure.tenant_id == tenant_id)
         statement = statement.limit(limit)
-        return session.exec(statement).all()
+        procedures = session.exec(statement).all()
+        # Convert to dicts before session closes
+        return [_procedure_to_dict(p) for p in procedures]
 
 
 def update_procedure_success_rate(
@@ -68,7 +87,9 @@ def update_procedure_success_rate(
             procedure.success_rate = success_rate
             session.commit()
             session.refresh(procedure)
-        return procedure
+            # Convert to dict before session closes
+            return _procedure_to_dict(procedure)
+        return None
 
 
 def forget_low_success_procedures(
@@ -109,4 +130,6 @@ def retrieve_similar_procedures(
         statement = statement.order_by(
             func.l2_distance(Procedure.embedding, embedding)
         ).limit(limit)
-        return session.exec(statement).all()
+        procedures = session.exec(statement).all()
+        # Convert to dicts before session closes
+        return [_procedure_to_dict(p) for p in procedures]

@@ -14,6 +14,20 @@ from thinkingmemory.core.database import get_session_context
 from thinkingmemory.memory.semantic.models import Fact
 
 
+def _fact_to_dict(fact: Fact) -> dict:
+    """Convert a Fact to a serializable dict."""
+    return {
+        "id": fact.id,
+        "tenant_id": fact.tenant_id,
+        "agent_id": fact.agent_id,
+        "fact": fact.fact,
+        "embedding": list(fact.embedding) if fact.embedding else None,
+        "timestamp": fact.timestamp,
+        "confidence": fact.confidence,
+        "source": fact.source,
+    }
+
+
 def store_fact(
     agent_id: str,
     fact: str,
@@ -37,7 +51,8 @@ def store_fact(
         session.add(fact_item)
         session.commit()
         session.refresh(fact_item)
-        return fact_item
+        # Convert to dict before session closes
+        return _fact_to_dict(fact_item)
 
 
 def retrieve_facts(agent_id: str, limit: int = 10, tenant_id: Optional[str] = None):
@@ -47,7 +62,9 @@ def retrieve_facts(agent_id: str, limit: int = 10, tenant_id: Optional[str] = No
         if tenant_id is not None:
             statement = statement.where(Fact.tenant_id == tenant_id)
         statement = statement.limit(limit)
-        return session.exec(statement).all()
+        facts = session.exec(statement).all()
+        # Convert to dicts before session closes
+        return [_fact_to_dict(f) for f in facts]
 
 
 def forget_low_confidence_facts(
@@ -88,4 +105,6 @@ def retrieve_similar_facts(
         statement = statement.order_by(
             func.l2_distance(Fact.embedding, embedding)
         ).limit(limit)
-        return session.exec(statement).all()
+        facts = session.exec(statement).all()
+        # Convert to dicts before session closes
+        return [_fact_to_dict(f) for f in facts]
