@@ -1,8 +1,8 @@
 from sqlmodel import select, delete
-from src.memory.semantic.models import Fact
-from src.memory.semantic.database import get_session
 from sqlalchemy import func
-from pgvector.sqlalchemy import Vector
+
+from thinkingmemory.core.database import get_session_context
+from thinkingmemory.memory.semantic.models import Fact
 
 def store_fact(agent_id: str, fact: str, embedding: list[float] = None, confidence: float = 1.0, source: str = None):
     fact_item = Fact(
@@ -12,20 +12,20 @@ def store_fact(agent_id: str, fact: str, embedding: list[float] = None, confiden
         confidence=confidence,
         source=source
     )
-    with next(get_session()) as session:
+    with get_session_context() as session:
         session.add(fact_item)
         session.commit()
         session.refresh(fact_item)
         return fact_item
 
 def retrieve_facts(agent_id: str, limit: int = 10):
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = select(Fact).where(Fact.agent_id == agent_id).limit(limit)
         return session.exec(statement).all()
 
 def forget_low_confidence_facts(agent_id: str, confidence_threshold: float = 0.5):
     """Delete facts with confidence below the threshold."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = delete(Fact).where(
             Fact.agent_id == agent_id,
             Fact.confidence < confidence_threshold
@@ -36,7 +36,7 @@ def forget_low_confidence_facts(agent_id: str, confidence_threshold: float = 0.5
 
 def retrieve_similar_facts(agent_id: str, embedding: list[float], limit: int = 10, similarity_threshold: float = 0.5):
     """Retrieve facts similar to the given embedding."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         # Calculate cosine distance between the query embedding and stored embeddings
         # pgvector uses <-> for cosine distance (lower is more similar)
         # We'll use the <-> operator via func

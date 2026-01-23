@@ -1,8 +1,8 @@
 from sqlmodel import select, delete
-from src.memory.procedural.models import Procedure
-from src.memory.procedural.database import get_session
 from sqlalchemy import func
-from pgvector.sqlalchemy import Vector
+
+from thinkingmemory.core.database import get_session_context
+from thinkingmemory.memory.procedural.models import Procedure
 
 def store_procedure(agent_id: str, name: str, description: str = None, steps: list[dict] = None, success_rate: float = 1.0, version: int = 1):
     procedure = Procedure(
@@ -13,19 +13,19 @@ def store_procedure(agent_id: str, name: str, description: str = None, steps: li
         success_rate=success_rate,
         version=version
     )
-    with next(get_session()) as session:
+    with get_session_context() as session:
         session.add(procedure)
         session.commit()
         session.refresh(procedure)
         return procedure
 
 def retrieve_procedures(agent_id: str, limit: int = 10):
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = select(Procedure).where(Procedure.agent_id == agent_id).limit(limit)
         return session.exec(statement).all()
 
 def update_procedure_success_rate(procedure_id: int, success_rate: float):
-    with next(get_session()) as session:
+    with get_session_context() as session:
         procedure = session.get(Procedure, procedure_id)
         if procedure:
             procedure.success_rate = success_rate
@@ -35,7 +35,7 @@ def update_procedure_success_rate(procedure_id: int, success_rate: float):
 
 def forget_low_success_procedures(agent_id: str, success_threshold: float = 0.5):
     """Delete procedures with success rate below the threshold."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = delete(Procedure).where(
             Procedure.agent_id == agent_id,
             Procedure.success_rate < success_threshold
@@ -46,7 +46,7 @@ def forget_low_success_procedures(agent_id: str, success_threshold: float = 0.5)
 
 def retrieve_similar_procedures(agent_id: str, embedding: list[float], limit: int = 10, similarity_threshold: float = 0.5):
     """Retrieve procedures similar to the given embedding."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         # Calculate cosine distance between the query embedding and stored embeddings
         # pgvector uses <-> for cosine distance (lower is more similar)
         # We'll use the <-> operator via func

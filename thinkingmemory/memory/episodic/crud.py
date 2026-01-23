@@ -1,10 +1,11 @@
 from sqlmodel import select, delete
-from src.memory.episodic.models import MemoryItem
-from src.memory.episodic.database import get_session
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from pgvector.sqlalchemy import Vector
 import numpy as np
+
+from thinkingmemory.core.database import get_session_context
+from thinkingmemory.memory.episodic.models import MemoryItem
+
 
 def store_memory(agent_id: str, content: dict, embedding: list[float] = None, extra_data: dict = None):
     item = MemoryItem(
@@ -13,7 +14,7 @@ def store_memory(agent_id: str, content: dict, embedding: list[float] = None, ex
         embedding=embedding,
         extra_data=extra_data
     )
-    with next(get_session()) as session:
+    with get_session_context() as session:
         session.add(item)
         session.commit()
         session.refresh(item)
@@ -21,7 +22,7 @@ def store_memory(agent_id: str, content: dict, embedding: list[float] = None, ex
 
 def retrieve_memories(agent_id: str, limit: int = 10, track_access: bool = True):
     """Retrieve recent memories and optionally track access for relevance scoring."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = select(MemoryItem).where(MemoryItem.agent_id == agent_id).order_by(
             MemoryItem.timestamp.desc()
         ).limit(limit)
@@ -38,7 +39,7 @@ def retrieve_memories(agent_id: str, limit: int = 10, track_access: bool = True)
 def forget_old_memories(agent_id: str, days: int = 30):
     """Delete memories older than `days` for a specific agent."""
     cutoff_date = datetime.utcnow() - timedelta(days=days)
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = delete(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
             MemoryItem.timestamp < cutoff_date
@@ -60,7 +61,7 @@ def forget_low_relevance_memories(agent_id: str, min_access_count: int = 1, days
     - last_accessed is None OR last_accessed > days_since_access ago
     """
     cutoff_date = datetime.utcnow() - timedelta(days=days_since_access)
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = delete(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
             MemoryItem.access_count < min_access_count,
@@ -72,7 +73,7 @@ def forget_low_relevance_memories(agent_id: str, min_access_count: int = 1, days
 
 def retrieve_similar_memories(agent_id: str, embedding: list[float], limit: int = 10, similarity_threshold: float = 0.5, track_access: bool = True):
     """Retrieve memories similar to the given embedding and track access."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = select(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
             MemoryItem.embedding.isnot(None)
@@ -100,7 +101,7 @@ def compress_similar_memories(agent_id: str, similarity_threshold: float = 0.3, 
 
     Returns the number of compressed memories created.
     """
-    with next(get_session()) as session:
+    with get_session_context() as session:
         # Get all uncompressed memories with embeddings
         statement = select(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
@@ -188,7 +189,7 @@ def delete_compressed_originals(agent_id: str):
     Delete original memories that have been compressed.
     Call this after compression to free up space.
     """
-    with next(get_session()) as session:
+    with get_session_context() as session:
         statement = delete(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
             MemoryItem.is_compressed == True
@@ -199,7 +200,7 @@ def delete_compressed_originals(agent_id: str):
 
 def get_memory_stats(agent_id: str):
     """Get statistics about an agent's memories."""
-    with next(get_session()) as session:
+    with get_session_context() as session:
         total = session.exec(
             select(func.count(MemoryItem.id)).where(MemoryItem.agent_id == agent_id)
         ).one()

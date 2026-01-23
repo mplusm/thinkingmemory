@@ -1,12 +1,13 @@
-import redis
 import json
-import os
 from datetime import timedelta
 from typing import Optional
 
-# Get Redis URL from environment or use default
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-redis_client = redis.from_url(REDIS_URL)
+from thinkingmemory.core.database import get_redis
+
+
+def _get_client():
+    """Get the Redis client instance."""
+    return get_redis()
 
 def store_working_memory(agent_id: str, key: str, value: dict, ttl: int = 300) -> bool:
     """
@@ -22,7 +23,7 @@ def store_working_memory(agent_id: str, key: str, value: dict, ttl: int = 300) -
         True if stored successfully
     """
     full_key = f"{agent_id}:{key}"
-    redis_client.setex(full_key, timedelta(seconds=ttl), json.dumps(value))
+    _get_client().setex(full_key, timedelta(seconds=ttl), json.dumps(value))
     return True
 
 def retrieve_working_memory(agent_id: str, key: str) -> Optional[dict]:
@@ -37,7 +38,7 @@ def retrieve_working_memory(agent_id: str, key: str) -> Optional[dict]:
         The stored dictionary or None if not found
     """
     full_key = f"{agent_id}:{key}"
-    value = redis_client.get(full_key)
+    value = _get_client().get(full_key)
     return json.loads(value) if value else None
 
 def delete_working_memory(agent_id: str, key: str) -> bool:
@@ -52,7 +53,7 @@ def delete_working_memory(agent_id: str, key: str) -> bool:
         True if deleted, False if key didn't exist
     """
     full_key = f"{agent_id}:{key}"
-    return redis_client.delete(full_key) > 0
+    return _get_client().delete(full_key) > 0
 
 def list_working_memory_keys(agent_id: str) -> list[str]:
     """
@@ -65,7 +66,7 @@ def list_working_memory_keys(agent_id: str) -> list[str]:
         List of key names (without the agent_id prefix)
     """
     pattern = f"{agent_id}:*"
-    keys = redis_client.keys(pattern)
+    keys = _get_client().keys(pattern)
     prefix_len = len(f"{agent_id}:")
     return [key.decode('utf-8')[prefix_len:] for key in keys]
 
@@ -98,9 +99,9 @@ def clear_working_memory(agent_id: str) -> int:
         Number of keys deleted
     """
     pattern = f"{agent_id}:*"
-    keys = redis_client.keys(pattern)
+    keys = _get_client().keys(pattern)
     if keys:
-        return redis_client.delete(*keys)
+        return _get_client().delete(*keys)
     return 0
 
 def update_working_memory(agent_id: str, key: str, value: dict, ttl: Optional[int] = None) -> bool:
@@ -119,18 +120,18 @@ def update_working_memory(agent_id: str, key: str, value: dict, ttl: Optional[in
     full_key = f"{agent_id}:{key}"
 
     # Check if key exists
-    if not redis_client.exists(full_key):
+    if not _get_client().exists(full_key):
         return False
 
     if ttl is None:
         # Preserve existing TTL
-        remaining_ttl = redis_client.ttl(full_key)
+        remaining_ttl = _get_client().ttl(full_key)
         if remaining_ttl > 0:
             ttl = remaining_ttl
         else:
             ttl = 300  # Default if no TTL was set
 
-    redis_client.setex(full_key, timedelta(seconds=ttl), json.dumps(value))
+    _get_client().setex(full_key, timedelta(seconds=ttl), json.dumps(value))
     return True
 
 def extend_ttl(agent_id: str, key: str, additional_seconds: int) -> bool:
@@ -147,12 +148,12 @@ def extend_ttl(agent_id: str, key: str, additional_seconds: int) -> bool:
     """
     full_key = f"{agent_id}:{key}"
 
-    current_ttl = redis_client.ttl(full_key)
+    current_ttl = _get_client().ttl(full_key)
     if current_ttl < 0:
         return False
 
     new_ttl = current_ttl + additional_seconds
-    return redis_client.expire(full_key, new_ttl)
+    return _get_client().expire(full_key, new_ttl)
 
 def get_ttl(agent_id: str, key: str) -> int:
     """
@@ -166,7 +167,7 @@ def get_ttl(agent_id: str, key: str) -> int:
         Remaining TTL in seconds, -2 if key doesn't exist, -1 if no TTL set
     """
     full_key = f"{agent_id}:{key}"
-    return redis_client.ttl(full_key)
+    return _get_client().ttl(full_key)
 
 def working_memory_exists(agent_id: str, key: str) -> bool:
     """
@@ -180,7 +181,7 @@ def working_memory_exists(agent_id: str, key: str) -> bool:
         True if exists, False otherwise
     """
     full_key = f"{agent_id}:{key}"
-    return redis_client.exists(full_key) > 0
+    return _get_client().exists(full_key) > 0
 
 def get_working_memory_stats(agent_id: str) -> dict:
     """
@@ -197,7 +198,7 @@ def get_working_memory_stats(agent_id: str) -> dict:
 
     for key in keys:
         full_key = f"{agent_id}:{key}"
-        value = redis_client.get(full_key)
+        value = _get_client().get(full_key)
         if value:
             total_size += len(value)
 
