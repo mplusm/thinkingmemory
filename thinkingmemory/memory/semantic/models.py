@@ -9,6 +9,7 @@ class Fact(SQLModel, table=True):
         arbitrary_types_allowed = True
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: str = Field(default="default", index=True)  # Multi-tenant support
     agent_id: str
     fact: str
     embedding: Optional[Vector] = Field(default=None, sa_type=Vector)

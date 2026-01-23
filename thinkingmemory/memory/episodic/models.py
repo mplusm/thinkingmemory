@@ -9,6 +9,7 @@ class MemoryItem(SQLModel, table=True):
         arbitrary_types_allowed = True
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: str = Field(default="default", index=True)  # Multi-tenant support
     agent_id: str
     memory_type: str = "episodic"
     content: dict = Field(sa_type=JSON)
