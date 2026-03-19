@@ -11,6 +11,28 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
 - **Reasoning-aware retrieval**: Agents specify intent, and the system retrieves relevant memory.
 - **Forgetting strategies**: Automatically manage memory hygiene (time decay, relevance, etc.).
 
+## Memory Layers
+
+### Working Memory (Redis)
+Short-term key-value store with TTL-based auto-expiry.
+
+### Episodic Memory
+Stores past actions, decisions, and outcomes with vector embeddings for similarity search.
+
+### Semantic Memory
+Structured knowledge storage with specialized models:
+- **Facts** — generic text facts with confidence scores
+- **Data Sources** — databases, warehouses, and external systems
+- **Data Tables** — tables/views within data sources, with schema and row count info
+- **Data Columns** — columns with types, foreign keys, sample values, and lineage tracking
+- **Knowledge Entities** — generic structured knowledge (API schemas, configs, system components, concepts)
+
+### Procedural Memory
+Behavioral knowledge storage with specialized models:
+- **Procedures** — named step-by-step workflows with success rates
+- **User Preferences** — how the user likes things done (upsert semantics by agent+category+key)
+- **Workflow Habits** — observed behavioral patterns with separate success/failure counts
+
 ## Getting Started
 ### Prerequisites
 - Python 3.11+
@@ -48,12 +70,12 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
 ### Quickstart
 1. Initialize the database:
    ```bash
-   python src/memory/episodic/database.py
+   python scripts/init_db.py
    ```
 
 2. Start the API:
    ```bash
-   uvicorn src.api.main:app --reload --port 8091
+   uvicorn thinkingmemory.api.main:app --reload --port 8091
    ```
 
 3. Store a memory:
@@ -123,6 +145,134 @@ ThinkingMemory provides a layered memory system (Working, Episodic, Semantic, Pr
     ```bash
     curl -X DELETE "http://localhost:8091/procedural/forget/low-success/agent-123?success_threshold=0.5"
     ```
+
+### Semantic Memory — Data Models
+
+14. Store a data source:
+    ```bash
+    curl -X POST http://localhost:8091/semantic/sources/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "source_name": "production_postgres",
+      "source_type": "postgresql",
+      "description": "Main production database"
+    }'
+    ```
+
+15. Store a data table:
+    ```bash
+    curl -X POST http://localhost:8091/semantic/tables/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "table_name": "users",
+      "data_source_id": 1,
+      "schema_name": "public",
+      "table_type": "table",
+      "description": "Core user accounts",
+      "tags": ["core", "pii"]
+    }'
+    ```
+
+16. Store a data column with lineage:
+    ```bash
+    curl -X POST http://localhost:8091/semantic/columns/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "column_name": "user_id",
+      "data_table_id": 1,
+      "data_type": "integer",
+      "is_primary_key": true,
+      "lineage": {
+        "upstream": [{"source": "raw.events", "column": "user_id", "transform": "direct"}],
+        "downstream": [{"target": "analytics.user_stats", "column": "uid"}]
+      }
+    }'
+    ```
+
+17. Retrieve a table with all its columns:
+    ```bash
+    curl -X GET http://localhost:8091/semantic/tables/with-columns/1
+    ```
+
+18. Retrieve column lineage:
+    ```bash
+    curl -X GET http://localhost:8091/semantic/columns/lineage/1
+    ```
+
+19. Store a knowledge entity:
+    ```bash
+    curl -X POST http://localhost:8091/semantic/knowledge/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "entity_type": "api_endpoint",
+      "name": "/api/v1/users",
+      "description": "Returns paginated user list",
+      "properties": {"method": "GET", "auth": "bearer"},
+      "relationships": [{"type": "depends_on", "target_name": "auth_service"}],
+      "confidence": 1.0
+    }'
+    ```
+
+20. Retrieve knowledge by type:
+    ```bash
+    curl -X GET "http://localhost:8091/semantic/knowledge/retrieve/agent-123?entity_type=api_endpoint"
+    ```
+
+### Procedural Memory — Preferences & Habits
+
+21. Store a user preference (upserts on same agent+category+key):
+    ```bash
+    curl -X POST http://localhost:8091/procedural/preferences/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "category": "code_style",
+      "key": "indent_style",
+      "value": "spaces_4",
+      "confidence": 1.0,
+      "source": "explicit"
+    }'
+    ```
+
+22. Retrieve a specific preference:
+    ```bash
+    curl -X GET "http://localhost:8091/procedural/preferences/by-key/agent-123?category=code_style&key=indent_style"
+    ```
+
+23. Store a workflow habit:
+    ```bash
+    curl -X POST http://localhost:8091/procedural/habits/store -H "Content-Type: application/json" -d '{
+      "agent_id": "agent-123",
+      "habit_name": "morning_standup_query",
+      "pattern": {"trigger": "9am daily", "steps": ["query jira", "summarize blockers"], "context": "standup"},
+      "tags": ["daily", "standup"]
+    }'
+    ```
+
+24. Increment a habit (track success/failure):
+    ```bash
+    curl -X POST http://localhost:8091/procedural/habits/increment/1 -H "Content-Type: application/json" -d '{
+      "success": true
+    }'
+    ```
+
+25. Forget unused habits:
+    ```bash
+    curl -X DELETE "http://localhost:8091/procedural/habits/forget/unused/agent-123?max_frequency=1"
+    ```
+
+## API Reference
+
+All endpoints are documented in the interactive Swagger UI at `/docs` when the API is running.
+
+### Endpoint Overview
+
+| Prefix | Description |
+|--------|-------------|
+| `/memory/` | Episodic memory (store, retrieve, forget, similar) |
+| `/working/` | Working memory (key-value with TTL) |
+| `/semantic/store`, `/semantic/retrieve/`, `/semantic/similar/` | Semantic facts |
+| `/semantic/sources/` | Data source registry |
+| `/semantic/tables/` | Data table metadata |
+| `/semantic/columns/` | Data column definitions and lineage |
+| `/semantic/knowledge/` | Generic knowledge entities |
+| `/procedural/store`, `/procedural/retrieve/`, `/procedural/similar/` | Procedures |
+| `/procedural/preferences/` | User preferences (upsert semantics) |
+| `/procedural/habits/` | Workflow habits with success/failure tracking |
 
 ## Environment Variables
 The following environment variables can be set in a `.env` file:

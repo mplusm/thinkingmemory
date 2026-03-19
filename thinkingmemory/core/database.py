@@ -57,8 +57,8 @@ def init_db():
     # Import models here to avoid circular imports
     # These imports register the models with SQLModel.metadata
     from thinkingmemory.memory.episodic.models import MemoryItem  # noqa: F401
-    from thinkingmemory.memory.semantic.models import Fact  # noqa: F401
-    from thinkingmemory.memory.procedural.models import Procedure  # noqa: F401
+    from thinkingmemory.memory.semantic.models import Fact, DataSource, DataTable, DataColumn, KnowledgeEntity  # noqa: F401
+    from thinkingmemory.memory.procedural.models import Procedure, UserPreference, WorkflowHabit  # noqa: F401
 
     SQLModel.metadata.create_all(get_engine())
 
