@@ -19,6 +19,12 @@ if __name__ == "__main__":
         connection.execute(text("DROP TABLE IF EXISTS memoryitem CASCADE"))
         connection.execute(text("DROP TABLE IF EXISTS fact CASCADE"))
         connection.execute(text("DROP TABLE IF EXISTS procedure CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS datasource CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS datatable CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS datacolumn CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS knowledgeentity CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS userpreference CASCADE"))
+        connection.execute(text("DROP TABLE IF EXISTS workflowhabit CASCADE"))
         connection.commit()
 
     print("Dropped all tables successfully!")
