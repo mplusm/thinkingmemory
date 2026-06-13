@@ -4,6 +4,9 @@ from datetime import datetime
 from sqlalchemy import JSON
 from pgvector.sqlalchemy import Vector
 
+from thinkingmemory.core.embeddings import EMBEDDING_DIM
+from thinkingmemory.core.timeutils import utcnow
+
 class Procedure(SQLModel, table=True):
     class Config:
         arbitrary_types_allowed = True
@@ -14,9 +17,9 @@ class Procedure(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     steps: list[dict] = Field(sa_type=JSON)
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
     success_rate: float = Field(default=1.0)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utcnow)
     version: int = Field(default=1)
 
 
@@ -36,8 +39,8 @@ class UserPreference(SQLModel, table=True):
     source: Optional[str] = None
     observation_count: int = Field(default=1)
     last_observed: Optional[datetime] = None
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
 
 
 class WorkflowHabit(SQLModel, table=True):
@@ -56,6 +59,6 @@ class WorkflowHabit(SQLModel, table=True):
     last_performed: Optional[datetime] = None
     success_count: int = Field(default=0)
     failure_count: int = Field(default=0)
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     tags: Optional[list[str]] = Field(default=None, sa_type=JSON)

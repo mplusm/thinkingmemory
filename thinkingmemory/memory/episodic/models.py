@@ -4,17 +4,20 @@ from datetime import datetime
 from sqlalchemy import JSON
 from pgvector.sqlalchemy import Vector
 
+from thinkingmemory.core.embeddings import EMBEDDING_DIM
+from thinkingmemory.core.timeutils import utcnow
+
 class MemoryItem(SQLModel, table=True):
     class Config:
         arbitrary_types_allowed = True
 
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant_id: str = Field(default="default", index=True)  # Multi-tenant support
-    agent_id: str
+    agent_id: str = Field(index=True)
     memory_type: str = "episodic"
     content: dict = Field(sa_type=JSON)
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     extra_data: Optional[dict] = Field(default=None, sa_type=JSON)
     # Relevance tracking fields
     access_count: int = Field(default=0)

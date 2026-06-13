@@ -4,6 +4,9 @@ from datetime import datetime
 from sqlalchemy import JSON
 from pgvector.sqlalchemy import Vector
 
+from thinkingmemory.core.embeddings import EMBEDDING_DIM
+from thinkingmemory.core.timeutils import utcnow
+
 class Fact(SQLModel, table=True):
     class Config:
         arbitrary_types_allowed = True
@@ -12,8 +15,8 @@ class Fact(SQLModel, table=True):
     tenant_id: str = Field(default="default", index=True)  # Multi-tenant support
     agent_id: str
     fact: str
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     confidence: float = Field(default=1.0)
     source: Optional[str] = None
 
@@ -31,8 +34,8 @@ class DataSource(SQLModel, table=True):
     source_type: Optional[str] = None
     description: Optional[str] = None
     connection_alias: Optional[str] = None
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     metadata_: Optional[dict] = Field(default=None, sa_type=JSON)
 
 
@@ -51,8 +54,8 @@ class DataTable(SQLModel, table=True):
     table_type: Optional[str] = None
     description: Optional[str] = None
     row_count_estimate: Optional[int] = None
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     tags: Optional[list[str]] = Field(default=None, sa_type=JSON)
 
 
@@ -75,8 +78,8 @@ class DataColumn(SQLModel, table=True):
     description: Optional[str] = None
     sample_values: Optional[list[str]] = Field(default=None, sa_type=JSON)
     lineage: Optional[dict] = Field(default=None, sa_type=JSON)
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     tags: Optional[list[str]] = Field(default=None, sa_type=JSON)
 
 
@@ -96,6 +99,6 @@ class KnowledgeEntity(SQLModel, table=True):
     relationships: Optional[list[dict]] = Field(default=None, sa_type=JSON)
     source: Optional[str] = None
     confidence: float = Field(default=1.0)
-    embedding: Optional[Vector] = Field(default=None, sa_type=Vector)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    embedding: Optional[Vector] = Field(default=None, sa_type=Vector(EMBEDDING_DIM))
+    timestamp: datetime = Field(default_factory=utcnow)
     tags: Optional[list[str]] = Field(default=None, sa_type=JSON)

@@ -11,6 +11,8 @@ from sqlmodel import select, delete
 from sqlalchemy import func
 
 from thinkingmemory.core.database import get_session_context
+from thinkingmemory.core.embeddings import embedding_to_list
+from thinkingmemory.core.timeutils import utcnow
 from thinkingmemory.memory.procedural.models import Procedure, UserPreference, WorkflowHabit
 
 
@@ -23,7 +25,7 @@ def _procedure_to_dict(procedure: Procedure) -> dict:
         "name": procedure.name,
         "description": procedure.description,
         "steps": procedure.steps,
-        "embedding": list(procedure.embedding) if procedure.embedding else None,
+        "embedding": embedding_to_list(procedure.embedding),
         "success_rate": procedure.success_rate,
         "timestamp": procedure.timestamp,
         "version": procedure.version,
@@ -128,7 +130,7 @@ def retrieve_similar_procedures(
             statement = statement.where(Procedure.tenant_id == tenant_id)
 
         statement = statement.order_by(
-            func.l2_distance(Procedure.embedding, embedding)
+            Procedure.embedding.l2_distance(embedding)
         ).limit(limit)
         procedures = session.exec(statement).all()
         # Convert to dicts before session closes
@@ -153,7 +155,7 @@ def _preference_to_dict(p: UserPreference) -> dict:
         "source": p.source,
         "observation_count": p.observation_count,
         "last_observed": p.last_observed,
-        "embedding": list(p.embedding) if p.embedding else None,
+        "embedding": embedding_to_list(p.embedding),
         "timestamp": p.timestamp,
     }
 
@@ -171,8 +173,6 @@ def store_preference(
     tenant_id: Optional[str] = None,
 ):
     """Store or update a user preference (upsert by agent_id+category+key)."""
-    from datetime import datetime as dt
-
     with get_session_context() as session:
         # Check for existing preference with same agent_id+category+key
         statement = select(UserPreference).where(
@@ -191,7 +191,7 @@ def store_preference(
             if source is not None:
                 existing.source = source
             existing.observation_count = existing.observation_count + 1
-            existing.last_observed = last_observed or dt.utcnow()
+            existing.last_observed = last_observed or utcnow()
             if embedding is not None:
                 existing.embedding = embedding
             session.commit()
@@ -266,7 +266,7 @@ def retrieve_similar_preferences(
         if tenant_id is not None:
             statement = statement.where(UserPreference.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(UserPreference.embedding, embedding)
+            UserPreference.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_preference_to_dict(i) for i in items]
@@ -321,7 +321,7 @@ def _habit_to_dict(h: WorkflowHabit) -> dict:
         "last_performed": h.last_performed,
         "success_count": h.success_count,
         "failure_count": h.failure_count,
-        "embedding": list(h.embedding) if h.embedding else None,
+        "embedding": embedding_to_list(h.embedding),
         "timestamp": h.timestamp,
         "tags": h.tags,
     }
@@ -390,7 +390,7 @@ def retrieve_similar_habits(
         if tenant_id is not None:
             statement = statement.where(WorkflowHabit.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(WorkflowHabit.embedding, embedding)
+            WorkflowHabit.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_habit_to_dict(i) for i in items]
@@ -398,8 +398,6 @@ def retrieve_similar_habits(
 
 def increment_habit(habit_id: int, success: bool, tenant_id: Optional[str] = None):
     """Increment a habit's frequency and success/failure counts."""
-    from datetime import datetime as dt
-
     with get_session_context() as session:
         item = session.get(WorkflowHabit, habit_id)
         if item is None:
@@ -411,7 +409,7 @@ def increment_habit(habit_id: int, success: bool, tenant_id: Optional[str] = Non
             item.success_count += 1
         else:
             item.failure_count += 1
-        item.last_performed = dt.utcnow()
+        item.last_performed = utcnow()
         session.commit()
         session.refresh(item)
         return _habit_to_dict(item)
