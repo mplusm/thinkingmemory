@@ -5,8 +5,19 @@ These Pydantic models define the API contract and can be reused
 by wrapper applications.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
+
+from thinkingmemory.core.embeddings import EMBEDDING_DIM
+
+
+def _validate_embedding_dim(value: Optional[list[float]]) -> Optional[list[float]]:
+    """Reject embeddings whose length does not match the configured dimension."""
+    if value is not None and len(value) != EMBEDDING_DIM:
+        raise ValueError(
+            f"embedding must have {EMBEDDING_DIM} dimensions, got {len(value)}"
+        )
+    return value
 
 
 # =============================================================================
@@ -16,14 +27,19 @@ from typing import Optional
 class MemoryStoreRequest(BaseModel):
     agent_id: str
     content: dict
+    memory_type: str = "episodic"
     embedding: Optional[list[float]] = None
     extra_data: Optional[dict] = None
+
+    _check_embedding = field_validator("embedding")(_validate_embedding_dim)
 
 
 class SimilarityRequest(BaseModel):
     embedding: list[float]
     limit: int = 10
     similarity_threshold: float = 0.5
+
+    _check_embedding = field_validator("embedding")(_validate_embedding_dim)
 
 
 # =============================================================================
