@@ -11,6 +11,7 @@ from sqlmodel import select, delete
 from sqlalchemy import func
 
 from thinkingmemory.core.database import get_session_context
+from thinkingmemory.core.embeddings import embedding_to_list
 from thinkingmemory.memory.semantic.models import (
     Fact,
     DataSource,
@@ -27,7 +28,7 @@ def _fact_to_dict(fact: Fact) -> dict:
         "tenant_id": fact.tenant_id,
         "agent_id": fact.agent_id,
         "fact": fact.fact,
-        "embedding": list(fact.embedding) if fact.embedding else None,
+        "embedding": embedding_to_list(fact.embedding),
         "timestamp": fact.timestamp,
         "confidence": fact.confidence,
         "source": fact.source,
@@ -109,7 +110,7 @@ def retrieve_similar_facts(
             statement = statement.where(Fact.tenant_id == tenant_id)
 
         statement = statement.order_by(
-            func.l2_distance(Fact.embedding, embedding)
+            Fact.embedding.l2_distance(embedding)
         ).limit(limit)
         facts = session.exec(statement).all()
         # Convert to dicts before session closes
@@ -131,7 +132,7 @@ def _datasource_to_dict(ds: DataSource) -> dict:
         "source_type": ds.source_type,
         "description": ds.description,
         "connection_alias": ds.connection_alias,
-        "embedding": list(ds.embedding) if ds.embedding else None,
+        "embedding": embedding_to_list(ds.embedding),
         "timestamp": ds.timestamp,
         "metadata_": ds.metadata_,
     }
@@ -194,7 +195,7 @@ def retrieve_similar_datasources(
         if tenant_id is not None:
             statement = statement.where(DataSource.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(DataSource.embedding, embedding)
+            DataSource.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_datasource_to_dict(i) for i in items]
@@ -250,7 +251,7 @@ def _datatable_to_dict(dt: DataTable) -> dict:
         "table_type": dt.table_type,
         "description": dt.description,
         "row_count_estimate": dt.row_count_estimate,
-        "embedding": list(dt.embedding) if dt.embedding else None,
+        "embedding": embedding_to_list(dt.embedding),
         "timestamp": dt.timestamp,
         "tags": dt.tags,
     }
@@ -317,7 +318,7 @@ def retrieve_similar_datatables(
         if tenant_id is not None:
             statement = statement.where(DataTable.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(DataTable.embedding, embedding)
+            DataTable.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_datatable_to_dict(i) for i in items]
@@ -400,7 +401,7 @@ def _datacolumn_to_dict(dc: DataColumn) -> dict:
         "description": dc.description,
         "sample_values": dc.sample_values,
         "lineage": dc.lineage,
-        "embedding": list(dc.embedding) if dc.embedding else None,
+        "embedding": embedding_to_list(dc.embedding),
         "timestamp": dc.timestamp,
         "tags": dc.tags,
     }
@@ -475,7 +476,7 @@ def retrieve_similar_datacolumns(
         if tenant_id is not None:
             statement = statement.where(DataColumn.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(DataColumn.embedding, embedding)
+            DataColumn.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_datacolumn_to_dict(i) for i in items]
@@ -551,7 +552,7 @@ def _knowledge_to_dict(ke: KnowledgeEntity) -> dict:
         "relationships": ke.relationships,
         "source": ke.source,
         "confidence": ke.confidence,
-        "embedding": list(ke.embedding) if ke.embedding else None,
+        "embedding": embedding_to_list(ke.embedding),
         "timestamp": ke.timestamp,
         "tags": ke.tags,
     }
@@ -627,7 +628,7 @@ def retrieve_similar_knowledge(
         if tenant_id is not None:
             statement = statement.where(KnowledgeEntity.tenant_id == tenant_id)
         statement = statement.order_by(
-            func.l2_distance(KnowledgeEntity.embedding, embedding)
+            KnowledgeEntity.embedding.l2_distance(embedding)
         ).limit(limit)
         items = session.exec(statement).all()
         return [_knowledge_to_dict(i) for i in items]

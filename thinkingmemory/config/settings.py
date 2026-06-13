@@ -30,10 +30,18 @@ class Settings(BaseSettings):
     # Redis settings
     redis_url: str = "redis://localhost:6379/0"
 
+    # Embedding settings
+    # Dimension of stored embedding vectors. This MUST match the model used to
+    # generate embeddings (e.g. 1536 for OpenAI text-embedding-3-small,
+    # 3072 for text-embedding-3-large). It is fixed at the column level so that
+    # pgvector can build HNSW indexes for fast similarity search.
+    embedding_dim: int = 1536
+
     # Application settings
     app_name: str = "ThinkingMemory API"
     app_version: str = "0.1.0"
     debug: bool = False
+    log_level: str = "INFO"
 
 
 @lru_cache

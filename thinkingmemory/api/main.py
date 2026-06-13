@@ -23,6 +23,7 @@ from fastapi import FastAPI
 
 from thinkingmemory.config.settings import get_settings
 from thinkingmemory.core.database import init_db
+from thinkingmemory.api.errors import configure_logging, install_error_handlers
 from thinkingmemory.api.routers import (
     episodic_router,
     semantic_router,
@@ -74,14 +75,17 @@ def create_app(
         include_routers(app)
     """
     settings = get_settings()
+    configure_logging(settings.log_level)
 
-    return FastAPI(
+    app = FastAPI(
         title=title or settings.app_name,
         description=description or "Agent-agnostic memory platform",
         version=version or settings.app_version,
         lifespan=lifespan or default_lifespan,
         **kwargs,
     )
+    install_error_handlers(app)
+    return app
 
 
 def include_routers(app: FastAPI) -> None:

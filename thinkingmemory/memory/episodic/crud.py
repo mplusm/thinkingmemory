@@ -13,6 +13,8 @@ from sqlalchemy import func
 import numpy as np
 
 from thinkingmemory.core.database import get_session_context
+from thinkingmemory.core.embeddings import embedding_to_list
+from thinkingmemory.core.timeutils import utcnow
 from thinkingmemory.memory.episodic.models import MemoryItem
 
 
@@ -31,7 +33,7 @@ def _memory_to_dict(memory: MemoryItem) -> dict:
         "agent_id": memory.agent_id,
         "memory_type": memory.memory_type,
         "content": memory.content,
-        "embedding": list(memory.embedding) if memory.embedding else None,
+        "embedding": embedding_to_list(memory.embedding),
         "timestamp": memory.timestamp,
         "extra_data": memory.extra_data,
         "access_count": memory.access_count,
@@ -46,6 +48,7 @@ def store_memory(
     content: dict,
     embedding: list[float] = None,
     extra_data: dict = None,
+    memory_type: str = "episodic",
     tenant_id: Optional[str] = None,
 ):
     """Store a new episodic memory."""
@@ -54,6 +57,7 @@ def store_memory(
         content=content,
         embedding=embedding,
         extra_data=extra_data,
+        memory_type=memory_type,
     )
     # Set tenant_id if provided (column added via migration)
     if tenant_id is not None:
@@ -84,7 +88,7 @@ def retrieve_memories(
         if track_access:
             for memory in memories:
                 memory.access_count += 1
-                memory.last_accessed = datetime.utcnow()
+                memory.last_accessed = utcnow()
             session.commit()
 
         # Convert to dicts before session closes to avoid DetachedInstanceError
@@ -93,7 +97,7 @@ def retrieve_memories(
 
 def forget_old_memories(agent_id: str, days: int = 30, tenant_id: Optional[str] = None):
     """Delete memories older than `days` for a specific agent."""
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = utcnow() - timedelta(days=days)
     with get_session_context() as session:
         statement = delete(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
@@ -124,7 +128,7 @@ def forget_low_relevance_memories(
     - access_count < min_access_count AND
     - last_accessed is None OR last_accessed > days_since_access ago
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=days_since_access)
+    cutoff_date = utcnow() - timedelta(days=days_since_access)
     with get_session_context() as session:
         statement = delete(MemoryItem).where(
             MemoryItem.agent_id == agent_id,
@@ -155,7 +159,7 @@ def retrieve_similar_memories(
         )
         statement = _apply_tenant_filter(statement, MemoryItem, tenant_id)
         statement = statement.order_by(
-            func.l2_distance(MemoryItem.embedding, embedding)
+            MemoryItem.embedding.l2_distance(embedding)
         ).limit(limit)
 
         memories = session.exec(statement).all()
@@ -163,7 +167,7 @@ def retrieve_similar_memories(
         if track_access:
             for memory in memories:
                 memory.access_count += 1
-                memory.last_accessed = datetime.utcnow()
+                memory.last_accessed = utcnow()
             session.commit()
 
         # Convert to dicts before session closes
@@ -218,7 +222,7 @@ def compress_similar_memories(
                     continue
 
                 # Calculate L2 distance between embeddings
-                if memory.embedding and other_memory.embedding:
+                if memory.embedding is not None and other_memory.embedding is not None:
                     dist = np.linalg.norm(
                         np.array(list(memory.embedding)) - np.array(list(other_memory.embedding))
                     )
@@ -256,7 +260,7 @@ def compress_similar_memories(
                 memory_type="episodic_compressed",
                 content=aggregated_content,
                 embedding=avg_embedding,
-                extra_data={"compression_date": datetime.utcnow().isoformat()},
+                extra_data={"compression_date": utcnow().isoformat()},
                 access_count=total_access,
                 is_compressed=False,
                 source_memory_ids=[m.id for m in cluster],
