@@ -12,12 +12,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from thinkingmemory.api.dependencies import get_tenant_id
-from thinkingmemory.engine import store, recall as recall_engine
+from thinkingmemory.engine import store, recall as recall_engine, lifecycle
 from thinkingmemory.engine.schemas import (
     RememberRequest,
     RememberManyRequest,
     RecallRequest,
     ForgetRequest,
+    MaintenanceRequest,
 )
 
 router = APIRouter(prefix="/v1", tags=["memory-db"])
@@ -37,6 +38,7 @@ async def remember_endpoint(
         scope=request.scope,
         salience=request.salience,
         confidence=request.confidence,
+        decay_rate=request.decay_rate,
         provenance=request.provenance,
         tenant_id=tenant_id,
     )
@@ -103,3 +105,17 @@ async def forget_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail=f"Memory {request.memory_id} not found")
     return {"forgotten": request.memory_id, "hard": request.hard}
+
+
+@router.post("/maintenance/run")
+async def maintenance_endpoint(
+    request: MaintenanceRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Run the lifecycle cycle (decay, consolidate, supersede, forget, prune)
+    for an agent. Returns per-pass counts."""
+    return lifecycle.run_all(
+        agent_id=request.agent_id,
+        tenant_id=tenant_id,
+        interval_days=request.interval_days,
+    )
