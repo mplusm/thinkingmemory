@@ -1,13 +1,69 @@
 # ThinkingMemory — Complete Integration Reference
 
-**Version:** 2.1
+**Version:** 3.0
 **Base URL (cloud):** `https://memory.thinkingdbx.com`
 **Base URL (local):** `http://localhost:8091`
 **Auth (cloud):** `X-API-Key: tm_live_xxx` header required on all requests
 **Tenancy (open-source):** optional `X-Tenant-ID` header scopes a request to a tenant; omit it for single-tenant mode
-**Embeddings:** caller-supplied vectors of a fixed dimension (`EMBEDDING_DIM`, default `1536`); the platform stores and indexes them but does not generate them
-**MCP:** an MCP server (`thinkingmemory-mcp`) exposes the same memory operations as agent tools — see [MCP Server](#mcp-server)
+**Embeddings:** generated **server-side** (default: local `bge-small-en-v1.5`, 384-dim); callers send text, not vectors
+**MCP:** an MCP server (`thinkingmemory-mcp`) exposes the same operations as agent tools — see [MCP Server](#mcp-server)
 **Interactive docs:** `{base_url}/docs` (Swagger UI)
+
+---
+
+> ## ⚠️ v3.0 — the unified memory database (`/v1`)
+>
+> The four separate layers (working/episodic/semantic/procedural) have been
+> **collapsed into one `Memory` substrate** queried by a single primitive,
+> **`recall`**: intent in, a ranked + token-budget-packed + cited context out.
+> The `mtype` field (`episodic|semantic|procedural|working`) is now a tag on a
+> row, not a separate table. Embeddings are generated server-side.
+>
+> **Use the `/v1` API below for new work.** The detailed per-layer sections
+> further down describe the **legacy** API, retained only for migration
+> reference (`scripts/migrate_to_memory_db.py` ports old rows into `memory`).
+
+## The unified API (`/v1`)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/v1/remember` | Store a memory; `text` is embedded server-side |
+| `POST` | `/v1/remember/batch` | Store many with one batched embed call |
+| `POST` | `/v1/recall` | **The primitive** — intent → packed, cited context |
+| `POST` | `/v1/forget` | Forget (`hard=false` soft-closes; `true` deletes) |
+| `GET`  | `/v1/memory/{id}` | Fetch one memory |
+| `GET`  | `/v1/trace/{id}` | Provenance — why a memory is known |
+
+**Remember**
+```bash
+curl -X POST {base_url}/v1/remember -H 'Content-Type: application/json' -d '{
+  "agent_id": "agent-1",
+  "content": {"text": "Q3 revenue target is $4.2M, up 18% from Q2."},
+  "mtype": "semantic"
+}'
+```
+
+**Recall** (intent in; ranked, deduped, packed-to-budget context out)
+```bash
+curl -X POST {base_url}/v1/recall -H 'Content-Type: application/json' -d '{
+  "agent_id": "agent-1",
+  "intent": "what is our Q3 revenue goal?",
+  "token_budget": 2000,
+  "mtypes": ["semantic"]
+}'
+```
+```json
+{
+  "context": "[1] Q3 revenue target is $4.2M, up 18% from Q2.",
+  "items": [{"citation": 1, "id": 7, "mtype": "semantic", "score": 0.81, "why": ["vector","keyword"]}],
+  "tokens_used": 16,
+  "tokens_saved_vs_dump": 290
+}
+```
+
+Recall fuses vector + keyword + recency (RRF, salience-weighted) and packs the
+top results into `token_budget`. Each recall boosts the salience of what it
+surfaced. Working memory (Redis TTL scratchpad) remains under `/working`.
 
 ---
 
@@ -917,16 +973,15 @@ Register with an MCP client (e.g. Claude Desktop):
 
 ### Tools
 
-| Tool | Layer | Purpose |
-|------|-------|---------|
-| `remember` | Episodic | Store an experience/event |
-| `recall` | Episodic | Recall most recent memories (no embedding needed) |
-| `recall_similar` | Episodic | Vector-similarity recall (requires a query embedding) |
-| `forget_old_memories` | Episodic | Delete memories older than N days |
-| `memory_stats` | Episodic | Stats about an agent's memory |
-| `store_fact` / `recall_facts` | Semantic | Store/recall durable facts |
-| `store_procedure` / `recall_procedures` | Procedural | Store/recall reusable workflows |
-| `set_working_memory` / `get_working_memory` / `list_working_memory` | Working | TTL-backed scratchpad |
+| Tool | Purpose |
+|------|---------|
+| `remember` | Store a memory (any `mtype`); text embedded server-side |
+| `recall` | **The primitive** — intent in, ranked + packed + cited context out |
+| `remember_fact` | Convenience: store a semantic fact |
+| `remember_procedure` | Convenience: store a procedural workflow |
+| `get_memory` | Fetch a single memory by id |
+| `forget` | Forget a memory (soft by default; hard deletes) |
+| `set_working_memory` / `get_working_memory` / `list_working_memory` | Redis TTL scratchpad |
 
 Each tool accepts an optional `tenant_id`; a process-wide default can be set with
 `THINKINGMEMORY_TENANT_ID`.

@@ -21,3 +21,6 @@ __pycache__/
 
 # Database
 *.sqlite
+# Local secrets
+gh.tct
+*.tct
