@@ -68,16 +68,13 @@ def get_redis() -> redis.Redis:
 
 def init_db():
     """
-    Initialize all database tables.
+    Initialize the unified memory database.
 
-    This creates all tables defined in SQLModel models (MemoryItem, Fact, Procedure).
-    Safe to call multiple times - existing tables won't be modified.
+    Creates the ``memory`` table (the single substrate that replaced the legacy
+    four-layer tables) and its indexes. Safe to call repeatedly.
     """
-    # Import models here to avoid circular imports
-    # These imports register the models with SQLModel.metadata
-    from thinkingmemory.memory.episodic.models import MemoryItem  # noqa: F401
-    from thinkingmemory.memory.semantic.models import Fact, DataSource, DataTable, DataColumn, KnowledgeEntity  # noqa: F401
-    from thinkingmemory.memory.procedural.models import Procedure, UserPreference, WorkflowHabit  # noqa: F401
+    # Import here to register the model with SQLModel.metadata.
+    from thinkingmemory.engine.models import Memory  # noqa: F401
 
     engine = get_engine()
 
@@ -87,7 +84,34 @@ def init_db():
 
     SQLModel.metadata.create_all(engine)
 
-    create_vector_indexes()
+    create_memory_indexes()
+
+
+def create_memory_indexes() -> None:
+    """
+    Create the indexes the recall engine relies on for the ``memory`` table:
+
+    - HNSW (cosine) on ``embedding`` for vector similarity,
+    - GIN on ``to_tsvector('english', text)`` for keyword/BM25-style search,
+    - btree on ``(tenant_id, agent_id, created_at desc)`` for recency + scoping.
+
+    Best-effort and idempotent (IF NOT EXISTS); failures are logged, not fatal.
+    """
+    engine = get_engine()
+    statements = [
+        "CREATE INDEX IF NOT EXISTS idx_memory_embedding_hnsw "
+        "ON memory USING hnsw (embedding vector_cosine_ops)",
+        "CREATE INDEX IF NOT EXISTS idx_memory_text_gin "
+        "ON memory USING gin (to_tsvector('english', text))",
+        "CREATE INDEX IF NOT EXISTS idx_memory_agent_recency "
+        "ON memory (tenant_id, agent_id, created_at DESC)",
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as exc:  # pragma: no cover - depends on live DB state
+            logger.warning("Could not create memory index: %s (%s)", stmt, exc)
 
 
 def create_vector_indexes() -> None:
@@ -197,6 +221,7 @@ __all__ = [
     "get_engine",
     "get_redis",
     "init_db",
+    "create_memory_indexes",
     "create_vector_indexes",
     "migrate_vector_columns",
     "get_session",

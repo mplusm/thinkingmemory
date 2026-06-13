@@ -1,0 +1,105 @@
+"""
+The /v1 memory database API — the unified surface.
+
+`remember` writes experience (embedded server-side); `recall` is the query
+primitive (intent in, packed/cited context out). Tenant scoping reuses the
+existing `X-Tenant-ID` dependency. Unhandled errors propagate to the app-wide
+handler; only domain 404s are raised here.
+"""
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from thinkingmemory.api.dependencies import get_tenant_id
+from thinkingmemory.engine import store, recall as recall_engine
+from thinkingmemory.engine.schemas import (
+    RememberRequest,
+    RememberManyRequest,
+    RecallRequest,
+    ForgetRequest,
+)
+
+router = APIRouter(prefix="/v1", tags=["memory-db"])
+
+
+@router.post("/remember")
+async def remember_endpoint(
+    request: RememberRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Store a memory (embedded server-side)."""
+    return store.remember(
+        agent_id=request.agent_id,
+        content=request.content,
+        text=request.text,
+        mtype=request.mtype,
+        scope=request.scope,
+        salience=request.salience,
+        confidence=request.confidence,
+        provenance=request.provenance,
+        tenant_id=tenant_id,
+    )
+
+
+@router.post("/remember/batch")
+async def remember_batch_endpoint(
+    request: RememberManyRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Store many memories with a single batched embedding call."""
+    items = [it.model_dump() for it in request.items]
+    return store.remember_many(items, tenant_id=tenant_id)
+
+
+@router.post("/recall")
+async def recall_endpoint(
+    request: RecallRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """THE primitive: intent in, ranked + packed + cited context out."""
+    return recall_engine.recall(
+        agent_id=request.agent_id,
+        intent=request.intent,
+        tenant_id=tenant_id,
+        scopes=request.scopes,
+        mtypes=request.mtypes,
+        token_budget=request.token_budget,
+        k=request.k,
+    )
+
+
+@router.get("/memory/{memory_id}")
+async def get_memory_endpoint(
+    memory_id: int,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Fetch a single memory by id."""
+    result = store.get(memory_id, tenant_id=tenant_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found")
+    return result
+
+
+@router.get("/trace/{memory_id}")
+async def trace_memory_endpoint(
+    memory_id: int,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Why-do-I-know-this: provenance + the memories this was derived from."""
+    result = store.trace(memory_id, tenant_id=tenant_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found")
+    return result
+
+
+@router.post("/forget")
+async def forget_endpoint(
+    request: ForgetRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Forget a memory (soft by default; hard deletes)."""
+    ok = store.forget(request.memory_id, hard=request.hard, tenant_id=tenant_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Memory {request.memory_id} not found")
+    return {"forgotten": request.memory_id, "hard": request.hard}
