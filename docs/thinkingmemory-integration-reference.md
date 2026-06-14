@@ -36,6 +36,8 @@
 | `GET`  | `/v1/timeline/{agent_id}?as_of=…` | Bitemporal snapshot of belief at a time |
 | `GET`  | `/v1/audit` | Append-only operation log |
 | `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
+| `POST` | `/v1/link` | Link two memories (entity graph edge) |
+| `GET`  | `/v1/neighbors/{id}` | Memories reachable within N hops |
 
 **Remember**
 ```bash
@@ -76,6 +78,13 @@ and `created_at`/`superseded_at` (learned/closed), so you can query the past:
 returns an append-only operation log. With `RLS_ENABLED=true`
 (`scripts/enable_rls.py`), Postgres Row-Level Security enforces tenant isolation
 at the database via a per-session `app.tenant_id` GUC.
+
+**Recall knobs.** `POST /v1/recall` also accepts `rerank` (a local cross-encoder
+precision pass over the fused candidates) and `graph_hops` (expand the strongest
+hits to memories connected via `/v1/link` edges). The `memory` table is
+HASH-partitioned by `tenant_id` (`MEMORY_PARTITIONS`); fact extraction,
+consolidation summaries, and contradiction detection use an offline heuristic by
+default or an LLM when `LLM_PROVIDER` is set.
 
 **Lifecycle.** Background maintenance makes recall improve over time:
 `POST /v1/maintenance/run {"agent_id": "...", "interval_days": 1}` runs decay
