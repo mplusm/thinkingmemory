@@ -19,6 +19,21 @@ from thinkingmemory.core.timeutils import utcnow
 from thinkingmemory.engine.embeddings import get_embedder
 from thinkingmemory.engine.models import Memory
 
+# Default per-mtype salience decay rates (per day). Episodic experience fades
+# fastest; durable semantic/procedural knowledge fades slowly; working memory is
+# transient. Used when a caller doesn't specify decay_rate. Recall counteracts
+# decay by bumping salience, so frequently-useful memories persist.
+DECAY_DEFAULTS = {
+    "working": 0.30,     # ~2-day half-life
+    "episodic": 0.05,    # ~14-day half-life
+    "semantic": 0.005,   # ~140-day half-life
+    "procedural": 0.005,
+}
+
+
+def default_decay_rate(mtype: str) -> float:
+    return DECAY_DEFAULTS.get(mtype, 0.0)
+
 
 def render_text(content: dict, text: Optional[str] = None) -> str:
     """Derive the embeddable/packable text for a memory."""
@@ -65,6 +80,7 @@ def remember(
     scope: str = "private",
     salience: float = 1.0,
     confidence: float = 1.0,
+    decay_rate: Optional[float] = None,
     provenance: Optional[dict] = None,
     tenant_id: Optional[str] = None,
     embed: bool = True,
@@ -82,6 +98,7 @@ def remember(
         scope=scope,
         salience=salience,
         confidence=confidence,
+        decay_rate=decay_rate if decay_rate is not None else default_decay_rate(mtype),
         provenance=provenance,
     )
     if tenant_id is not None:
@@ -116,6 +133,8 @@ def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[di
             scope=it.get("scope", "private"),
             salience=it.get("salience", 1.0),
             confidence=it.get("confidence", 1.0),
+            decay_rate=it["decay_rate"] if it.get("decay_rate") is not None
+            else default_decay_rate(it.get("mtype", "episodic")),
             provenance=it.get("provenance"),
         )
         tid = it.get("tenant_id", tenant_id)

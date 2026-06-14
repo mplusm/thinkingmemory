@@ -112,6 +112,7 @@ curl -X POST localhost:8091/v1/recall -H 'Content-Type: application/json' -d '{
 | `POST` | `/v1/forget` | Forget a memory (soft by default; `hard` deletes) |
 | `GET`  | `/v1/memory/{id}` | Fetch one memory |
 | `GET`  | `/v1/trace/{id}` | Provenance — why a memory is known |
+| `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
 | `*`    | `/working/*` | Redis TTL scratchpad (short-term working memory) |
 
 Interactive docs at `/docs`. All endpoints accept an optional `X-Tenant-ID`
@@ -129,6 +130,26 @@ thinkingmemory-mcp          # stdio
 Tools: `remember`, `recall` (intent → packed context), `remember_fact`,
 `remember_procedure`, `get_memory`, `forget`, and working-memory tools. Set a
 default tenant with `THINKINGMEMORY_TENANT_ID`.
+
+## Lifecycle (recall that improves over time)
+
+Background maintenance is what makes this a memory *database*, not a vector
+store. Run it on a schedule (`scripts/run_lifecycle.py --all`, or
+`POST /v1/maintenance/run`):
+
+- **decay** — salience fades by `e^(-decay_rate·Δt)` (per-`mtype` defaults:
+  episodic fades fast, semantic/procedural slowly); recall counteracts it, so
+  useful memories stay high and stale ones sink.
+- **consolidate** ("sleep") — clusters of similar episodic memories are
+  summarized into one semantic memory, linked to its sources via provenance.
+- **forget** — low-salience, long-idle memories are soft-closed (recoverable),
+  then hard-pruned after a grace period.
+- **supersede** — near-duplicate semantic memories collapse to the newest
+  (contradiction-lite), older ones closed and linked.
+
+```bash
+python scripts/run_lifecycle.py --agent agent-1 --interval-days 1
+```
 
 ## Evaluation harness
 
@@ -164,9 +185,11 @@ pytest          # runs against live Postgres + Redis; self-cleaning
 
 ## Roadmap
 
-Lifecycle workers (decay, consolidation, contradiction resolution),
-cross-encoder reranking, graph-hop recall, bitemporal `/timeline` & provenance
-traces, and per-tenant RLS + partitioning. See `agent-db-plan.md`.
+Done: unified substrate + hybrid recall (Phase 1) and the lifecycle engine —
+decay, consolidation, forgetting, supersession (Phase 2). Next: a scheduler to
+run lifecycle automatically, cross-encoder reranking, graph-hop recall, LLM fact
+extraction + NLI contradiction detection, bitemporal `/timeline`, and per-tenant
+RLS + partitioning. See `agent-db-plan.md`.
 
 ## License
 
