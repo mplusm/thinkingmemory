@@ -57,6 +57,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--token-budget", type=int, default=200)
+    ap.add_argument("--rerank", action="store_true", help="enable cross-encoder rerank")
     args = ap.parse_args()
 
     init_db()
@@ -77,7 +78,8 @@ def main():
 
         t0 = time.time()
         res = recall_engine.recall(
-            agent_id, intent, token_budget=args.token_budget, k=args.k, track=False
+            agent_id, intent, token_budget=args.token_budget, k=args.k,
+            rerank=args.rerank, track=False,
         )
         latency_total += time.time() - t0
 

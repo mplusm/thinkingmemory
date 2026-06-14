@@ -74,6 +74,7 @@ async def recall_endpoint(
         token_budget=request.token_budget,
         k=request.k,
         as_of=request.as_of,
+        rerank=request.rerank,
     )
 
 
