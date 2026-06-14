@@ -41,7 +41,7 @@ def timeline(
 ) -> dict:
     """Return the set of memories an agent believed at a point in time."""
     as_of = to_naive_utc(as_of)
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         conds = [Memory.agent_id == agent_id, *temporal_conditions(as_of)]
         if tenant_id is not None:
             conds.append(Memory.tenant_id == tenant_id)

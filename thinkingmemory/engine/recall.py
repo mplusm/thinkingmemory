@@ -83,7 +83,7 @@ def recall(
     """
     qvec = embed_one(intent)
 
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         base = _base_conditions(agent_id, tenant_id, scopes, mtypes, as_of)
 
         # --- Candidate generation (three retrievers) ---
