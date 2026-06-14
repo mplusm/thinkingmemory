@@ -38,8 +38,16 @@ async def default_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # Startup
     init_db()
+    if get_settings().scheduler_enabled:
+        from thinkingmemory.engine.scheduler import start_scheduler
+
+        start_scheduler()
     yield
-    # Shutdown (nothing to clean up by default)
+    # Shutdown
+    if get_settings().scheduler_enabled:
+        from thinkingmemory.engine.scheduler import shutdown_scheduler
+
+        shutdown_scheduler()
 
 
 def create_app(
