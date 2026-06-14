@@ -27,7 +27,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from thinkingmemory.engine import store, recall as recall_engine
+from thinkingmemory.engine import store, recall as recall_engine, graph
 from thinkingmemory.memory.working import redis_client as working
 
 logger = logging.getLogger("thinkingmemory.mcp")
@@ -141,6 +141,25 @@ def remember_procedure(
             mtype="procedural",
             tenant_id=_tenant(tenant_id),
         )
+    )
+
+
+@mcp.tool()
+def link_memories(
+    src_id: int,
+    dst_id: int,
+    relation: str = "relates_to",
+    bidirectional: bool = False,
+    tenant_id: Optional[str] = None,
+) -> str:
+    """Create a typed relationship between two memories (the entity graph).
+
+    Recall can then expand from strong hits to connected memories via
+    `graph_hops`. Example relations: "caused_by", "depends_on", "relates_to".
+    """
+    return _dump(
+        graph.link(src_id, dst_id, relation=relation, bidirectional=bidirectional,
+                   tenant_id=_tenant(tenant_id))
     )
 
 

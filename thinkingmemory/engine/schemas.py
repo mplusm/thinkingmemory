@@ -36,8 +36,18 @@ class RecallRequest(BaseModel):
     k: int = Field(default=20, gt=0)
     as_of: Optional[datetime] = None   # recall against belief at a past moment
     rerank: Optional[bool] = None      # cross-encoder rerank (defaults to setting)
+    graph_hops: int = 0                # expand via the entity graph (0 = off)
 
 
 class ForgetRequest(BaseModel):
     memory_id: int
     hard: bool = False
+
+
+class LinkRequest(BaseModel):
+    src_id: int
+    dst_id: int
+    relation: str = "relates_to"
+    agent_id: str = ""
+    weight: float = 1.0
+    bidirectional: bool = False
