@@ -233,4 +233,5 @@ scale-out (read replicas, a dedicated vector tier). See `agent-db-plan.md`.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Copyright 2026 Mallesh Madapathi, ThinkingDBx Pvt. Ltd., Hyderabad, India.
