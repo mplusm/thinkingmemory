@@ -31,7 +31,11 @@ from sqlmodel import select
 from thinkingmemory.core.database import get_engine, get_session_context
 from thinkingmemory.core.timeutils import utcnow
 from thinkingmemory.engine.embeddings import get_embedder
+from thinkingmemory.engine.llm import get_llm
 from thinkingmemory.engine.models import Memory
+
+CONTRADICTION_SIM = 0.7   # topically-similar threshold for contradiction checks
+EXTRACT_LIMIT = 50
 
 # Defaults (overridable per call)
 FORGET_SALIENCE_THRESHOLD = 0.2
@@ -119,20 +123,23 @@ def prune_superseded(
         return conn.execute(text(sql), params).rowcount
 
 
-def _already_consolidated_ids(session, agent_id, tenant_id) -> set:
-    """Ids that are already a source of some consolidation summary.
-
-    ``provenance`` is a JSON (not JSONB) column, so we filter in Python rather
-    than with JSONB operators.
+def _sourced_origin_ids(session, agent_id, tenant_id, source: str) -> set:
+    """Ids already used as a derived_from source by memories with this provenance
+    ``source`` (e.g. 'consolidation', 'extraction'). ``provenance`` is JSON (not
+    JSONB) so we filter in Python.
     """
-    conds = [Memory.mtype == "semantic", Memory.valid_to.is_(None)]
+    conds = [Memory.valid_to.is_(None)]
     _scope(conds, agent_id, tenant_id)
     used = set()
     for m in session.exec(select(Memory).where(*conds)).all():
         prov = m.provenance or {}
-        if prov.get("source") == "consolidation":
+        if prov.get("source") == source:
             used.update(prov.get("derived_from", []))
     return used
+
+
+def _already_consolidated_ids(session, agent_id, tenant_id) -> set:
+    return _sourced_origin_ids(session, agent_id, tenant_id, "consolidation")
 
 
 def consolidate(
@@ -211,15 +218,101 @@ def consolidate(
 
 
 def _summarize(texts: list[str]) -> str:
-    """Extractive summary (no LLM): dedupe and join the cluster's memories."""
-    seen, unique = set(), []
-    for t in texts:
-        key = t.strip().lower()
-        if key not in seen:
-            seen.add(key)
-            unique.append(t.strip())
-    head = "; ".join(unique[:5])
-    return f"Summary of {len(texts)} related memories: {head}"
+    """Summarize a cluster — LLM when configured, else offline extractive."""
+    return get_llm().summarize(texts)
+
+
+def extract_semantic(
+    agent_id: str,
+    tenant_id: Optional[str] = None,
+    limit: int = EXTRACT_LIMIT,
+) -> int:
+    """Extract durable facts from recent episodic memories into semantic ones.
+
+    Each new semantic memory links back to its source episodic memory via
+    provenance. With the offline (NoLLM) provider this extracts declarative
+    sentences; an LLM provider yields cleaner atomic facts. Facts identical to
+    the source text are skipped to avoid noise.
+    """
+    llm = get_llm()
+    new_items: list[dict] = []
+    with get_session_context(tenant_id) as session:
+        conds = [Memory.mtype == "episodic", Memory.valid_to.is_(None)]
+        _scope(conds, agent_id, tenant_id)
+        rows = session.exec(
+            select(Memory).where(*conds).order_by(Memory.created_at.desc()).limit(limit)
+        ).all()
+        done = _sourced_origin_ids(session, agent_id, tenant_id, "extraction")
+        for m in rows:
+            if m.id in done:
+                continue
+            for fact in llm.extract_facts(m.text):
+                if not fact or fact.strip().lower() == m.text.strip().lower():
+                    continue
+                new_items.append(
+                    {
+                        "agent_id": m.agent_id,
+                        "content": {"text": fact},
+                        "text": fact,
+                        "mtype": "semantic",
+                        "tenant_id": m.tenant_id,
+                        "provenance": {"source": "extraction", "derived_from": [m.id]},
+                    }
+                )
+
+    if new_items:
+        from thinkingmemory.engine import store
+
+        store.remember_many(new_items, tenant_id=tenant_id)
+    return len(new_items)
+
+
+def resolve_contradictions(
+    agent_id: str,
+    tenant_id: Optional[str] = None,
+    sim_threshold: float = CONTRADICTION_SIM,
+) -> int:
+    """Close the older of any two contradictory semantic memories.
+
+    Considers topically-similar pairs (cosine ≥ sim_threshold, below the
+    near-duplicate range handled by resolve_duplicates) and asks the LLM judge
+    (or offline polarity heuristic) whether they conflict; if so, the older is
+    soft-closed and linked to the survivor via provenance.
+    """
+    llm = get_llm()
+    with get_session_context(tenant_id) as session:
+        conds = [Memory.mtype == "semantic", Memory.valid_to.is_(None), Memory.embedding.isnot(None)]
+        _scope(conds, agent_id, tenant_id)
+        rows = session.exec(
+            select(Memory).where(*conds).order_by(Memory.created_at.desc())
+        ).all()
+        if len(rows) < 2:
+            return 0
+        norms = {
+            r.id: (lambda v: v / (np.linalg.norm(v) or 1.0))(np.asarray(list(r.embedding), dtype=float))
+            for r in rows
+        }
+        survivors: list = []
+        resolved = 0
+        now = utcnow()
+        for r in rows:  # newest first
+            conflict_with = None
+            for keep in survivors:
+                sim = float(norms[r.id] @ norms[keep.id])
+                if sim_threshold <= sim < 0.98 and llm.is_contradiction(keep.text, r.text):
+                    conflict_with = keep.id
+                    break
+            if conflict_with is not None:
+                prov = dict(r.provenance or {})
+                prov["contradicted_by"] = conflict_with
+                r.provenance = prov
+                r.valid_to = now
+                r.superseded_at = now
+                resolved += 1
+            else:
+                survivors.append(r)
+        session.commit()
+        return resolved
 
 
 def resolve_duplicates(
@@ -276,8 +369,10 @@ def run_all(
 
     counts = {
         "decayed": apply_decay(interval_days, agent_id, tenant_id),
+        "extracted": extract_semantic(agent_id, tenant_id),
         "consolidated": consolidate(agent_id, tenant_id),
         "superseded": resolve_duplicates(agent_id, tenant_id),
+        "contradicted": resolve_contradictions(agent_id, tenant_id),
         "forgotten": forget_decayed(agent_id, tenant_id),
         "pruned": prune_superseded(agent_id, tenant_id),
     }
@@ -291,5 +386,7 @@ __all__ = [
     "prune_superseded",
     "consolidate",
     "resolve_duplicates",
+    "resolve_contradictions",
+    "extract_semantic",
     "run_all",
 ]
