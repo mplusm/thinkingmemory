@@ -62,7 +62,8 @@ def cleanup_agent(db_available, redis_available):
     from thinkingmemory.core.database import get_engine, get_redis
 
     tables = [
-        "memory",  # unified table
+        "memory",        # unified table
+        "memory_audit",  # audit log
         "memoryitem", "fact", "procedure", "datasource", "datatable",
         "datacolumn", "knowledgeentity", "userpreference", "workflowhabit",
     ]

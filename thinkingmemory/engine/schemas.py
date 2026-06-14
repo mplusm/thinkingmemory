@@ -1,5 +1,6 @@
 """Request/response schemas for the unified /v1 memory API."""
 
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -33,6 +34,7 @@ class RecallRequest(BaseModel):
     mtypes: Optional[list[str]] = None
     token_budget: int = Field(default=4000, gt=0)
     k: int = Field(default=20, gt=0)
+    as_of: Optional[datetime] = None   # recall against belief at a past moment
 
 
 class ForgetRequest(BaseModel):
