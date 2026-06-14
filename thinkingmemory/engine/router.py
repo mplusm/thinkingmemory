@@ -16,7 +16,7 @@ from datetime import datetime
 from fastapi import Query
 
 from thinkingmemory.api.dependencies import get_tenant_id
-from thinkingmemory.engine import store, recall as recall_engine, lifecycle, audit
+from thinkingmemory.engine import store, recall as recall_engine, lifecycle, audit, graph
 from thinkingmemory.engine.temporal import timeline
 from thinkingmemory.engine.schemas import (
     RememberRequest,
@@ -24,6 +24,7 @@ from thinkingmemory.engine.schemas import (
     RecallRequest,
     ForgetRequest,
     MaintenanceRequest,
+    LinkRequest,
 )
 
 router = APIRouter(prefix="/v1", tags=["memory-db"])
@@ -75,6 +76,7 @@ async def recall_endpoint(
         k=request.k,
         as_of=request.as_of,
         rerank=request.rerank,
+        graph_hops=request.graph_hops,
     )
 
 
@@ -136,6 +138,33 @@ async def forget_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail=f"Memory {request.memory_id} not found")
     return {"forgotten": request.memory_id, "hard": request.hard}
+
+
+@router.post("/link")
+async def link_endpoint(
+    request: LinkRequest,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Create a typed relationship (edge) between two memories."""
+    return graph.link(
+        src_id=request.src_id,
+        dst_id=request.dst_id,
+        relation=request.relation,
+        agent_id=request.agent_id,
+        weight=request.weight,
+        bidirectional=request.bidirectional,
+        tenant_id=tenant_id,
+    )
+
+
+@router.get("/neighbors/{memory_id}")
+async def neighbors_endpoint(
+    memory_id: int,
+    depth: int = 1,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """List memories reachable from this one within `depth` hops."""
+    return {"memory_id": memory_id, "neighbors": graph.neighbor_list(memory_id, depth=depth, tenant_id=tenant_id)}
 
 
 @router.post("/maintenance/run")

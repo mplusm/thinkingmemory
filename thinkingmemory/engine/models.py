@@ -56,6 +56,25 @@ class Memory(SQLModel, table=True):
     provenance: Optional[dict] = Field(default=None, sa_type=JSON)
 
 
+class MemoryEdge(SQLModel, table=True):
+    """A directed, typed relationship between two memories (the entity graph).
+
+    Kept FK-free (plain ids) so it is unaffected by partitioning the ``memory``
+    table. Traversed with a recursive CTE for multi-hop recall.
+    """
+
+    __tablename__ = "memory_edge"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: str = Field(default="default", index=True)
+    agent_id: str = Field(index=True)
+    src_id: int = Field(index=True)
+    dst_id: int = Field(index=True)
+    relation: str = Field(default="relates_to")
+    weight: float = Field(default=1.0)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class AuditLog(SQLModel, table=True):
     """Append-only record of memory operations, for enterprise auditability."""
 
