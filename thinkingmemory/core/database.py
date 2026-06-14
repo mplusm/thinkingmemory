@@ -73,8 +73,8 @@ def init_db():
     Creates the ``memory`` table (the single substrate that replaced the legacy
     four-layer tables) and its indexes. Safe to call repeatedly.
     """
-    # Import here to register the model with SQLModel.metadata.
-    from thinkingmemory.engine.models import Memory  # noqa: F401
+    # Import here to register the models with SQLModel.metadata.
+    from thinkingmemory.engine.models import Memory, AuditLog  # noqa: F401
 
     engine = get_engine()
 

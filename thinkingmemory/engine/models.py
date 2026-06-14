@@ -54,3 +54,17 @@ class Memory(SQLModel, table=True):
 
     # Provenance: {source, derived_from: [ids], extractor, ...}
     provenance: Optional[dict] = Field(default=None, sa_type=JSON)
+
+
+class AuditLog(SQLModel, table=True):
+    """Append-only record of memory operations, for enterprise auditability."""
+
+    __tablename__ = "memory_audit"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: str = Field(default="default", index=True)
+    agent_id: str = Field(index=True)
+    action: str = Field(index=True)            # remember | recall | forget | maintenance
+    target_id: Optional[int] = Field(default=None)   # memory id, when applicable
+    details: Optional[dict] = Field(default=None, sa_type=JSON)
+    created_at: datetime = Field(default_factory=utcnow, index=True)

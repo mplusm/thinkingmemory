@@ -111,7 +111,9 @@ curl -X POST localhost:8091/v1/recall -H 'Content-Type: application/json' -d '{
 | `POST` | `/v1/recall` | **The primitive** — intent → packed, cited context |
 | `POST` | `/v1/forget` | Forget a memory (soft by default; `hard` deletes) |
 | `GET`  | `/v1/memory/{id}` | Fetch one memory |
-| `GET`  | `/v1/trace/{id}` | Provenance — why a memory is known |
+| `GET`  | `/v1/trace/{id}` | Recursive provenance tree — why a memory is known |
+| `GET`  | `/v1/timeline/{agent}?as_of=…` | What the agent believed at a point in time |
+| `GET`  | `/v1/audit` | Append-only log of memory operations |
 | `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
 | `*`    | `/working/*` | Redis TTL scratchpad (short-term working memory) |
 
@@ -151,6 +153,19 @@ store. Run it on a schedule (`scripts/run_lifecycle.py --all`, or
 python scripts/run_lifecycle.py --agent agent-1 --interval-days 1
 ```
 
+## Bitemporal & audit (enterprise)
+
+Every memory records when it was *true* (`valid_from`/`valid_to`) and when we
+*learned/closed* it (`created_at`/`superseded_at`), so you can ask what an agent
+believed in the past and prove how it knows things:
+
+- **`recall` with `as_of`** — retrieve against belief at a past moment.
+- **`GET /v1/timeline/{agent}?as_of=…`** — a snapshot of everything believed then.
+- **`GET /v1/trace/{id}`** — the recursive provenance tree (derived-from /
+  superseded-by) behind a memory.
+- **`GET /v1/audit`** — append-only log of remember/recall/forget/maintenance
+  (toggle with `audit_enabled`).
+
 ## Evaluation harness
 
 Retrieval quality is the product, so it's measured:
@@ -185,11 +200,12 @@ pytest          # runs against live Postgres + Redis; self-cleaning
 
 ## Roadmap
 
-Done: unified substrate + hybrid recall (Phase 1) and the lifecycle engine —
-decay, consolidation, forgetting, supersession (Phase 2). Next: a scheduler to
-run lifecycle automatically, cross-encoder reranking, graph-hop recall, LLM fact
-extraction + NLI contradiction detection, bitemporal `/timeline`, and per-tenant
-RLS + partitioning. See `agent-db-plan.md`.
+Done: unified substrate + hybrid recall (Phase 1); the lifecycle engine —
+decay, consolidation, forgetting, supersession (Phase 2); and bitemporal
+belief-over-time + provenance traces + audit log (Phase 3). Next: per-tenant
+Postgres RLS + partitioning, Apache AGE graph-hop recall, a scheduler for
+lifecycle, cross-encoder reranking, and LLM-based fact extraction + NLI
+contradiction detection. See `agent-db-plan.md`.
 
 ## License
 

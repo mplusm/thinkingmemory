@@ -11,8 +11,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from datetime import datetime
+
+from fastapi import Query
+
 from thinkingmemory.api.dependencies import get_tenant_id
-from thinkingmemory.engine import store, recall as recall_engine, lifecycle
+from thinkingmemory.engine import store, recall as recall_engine, lifecycle, audit
+from thinkingmemory.engine.temporal import timeline
 from thinkingmemory.engine.schemas import (
     RememberRequest,
     RememberManyRequest,
@@ -68,6 +73,7 @@ async def recall_endpoint(
         mtypes=request.mtypes,
         token_budget=request.token_budget,
         k=request.k,
+        as_of=request.as_of,
     )
 
 
@@ -86,13 +92,37 @@ async def get_memory_endpoint(
 @router.get("/trace/{memory_id}")
 async def trace_memory_endpoint(
     memory_id: int,
+    depth: int = 3,
     tenant_id: Optional[str] = Depends(get_tenant_id),
 ):
-    """Why-do-I-know-this: provenance + the memories this was derived from."""
-    result = store.trace(memory_id, tenant_id=tenant_id)
+    """Why-do-I-know-this: the recursive provenance tree for a memory."""
+    result = store.trace(memory_id, tenant_id=tenant_id, depth=depth)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Memory {memory_id} not found")
     return result
+
+
+@router.get("/timeline/{agent_id}")
+async def timeline_endpoint(
+    agent_id: str,
+    as_of: datetime = Query(..., description="ISO timestamp; what was believed at this moment"),
+    mtypes: Optional[list[str]] = Query(default=None),
+    limit: int = 200,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Bitemporal snapshot: what the agent believed at a point in time."""
+    return timeline(agent_id, as_of=as_of, tenant_id=tenant_id, mtypes=mtypes, limit=limit)
+
+
+@router.get("/audit")
+async def audit_endpoint(
+    agent_id: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 50,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Recent audit-log entries (newest first)."""
+    return audit.query(agent_id=agent_id, tenant_id=tenant_id, action=action, limit=limit)
 
 
 @router.post("/forget")
