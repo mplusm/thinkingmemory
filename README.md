@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/thinkingmemory-mark.svg" alt="ThinkingMemory" width="96" height="96">
+</p>
+
 # ThinkingMemory
 
 **The memory database agents recall from.** Point your agent at one endpoint; it
