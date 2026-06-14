@@ -13,11 +13,17 @@ class RememberRequest(BaseModel):
     scope: str = "private"             # private | shared | global
     salience: float = 1.0
     confidence: float = 1.0
+    decay_rate: Optional[float] = None   # defaults per mtype if omitted
     provenance: Optional[dict] = None
 
 
 class RememberManyRequest(BaseModel):
     items: list[RememberRequest]
+
+
+class MaintenanceRequest(BaseModel):
+    agent_id: str
+    interval_days: float = 1.0
 
 
 class RecallRequest(BaseModel):
