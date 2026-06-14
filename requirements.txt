@@ -9,5 +9,7 @@ numpy>=1.24.0
 # Server-side embeddings (local, CPU) + token counting for recall packing
 fastembed>=0.3.0
 tiktoken>=0.5.0
+# Background lifecycle scheduler
+apscheduler>=3.10.0
 # MCP server (optional - only needed to run `thinkingmemory-mcp`)
 mcp>=1.2.0
