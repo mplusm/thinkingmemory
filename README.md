@@ -115,7 +115,11 @@ curl -X POST localhost:8091/v1/recall -H 'Content-Type: application/json' -d '{
 | `GET`  | `/v1/timeline/{agent}?as_of=…` | What the agent believed at a point in time |
 | `GET`  | `/v1/audit` | Append-only log of memory operations |
 | `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
+| `POST` | `/v1/link` · `GET /v1/neighbors/{id}` | Entity graph: link memories / traverse |
 | `*`    | `/working/*` | Redis TTL scratchpad (short-term working memory) |
+
+`recall` accepts `rerank` (cross-encoder precision pass) and `graph_hops`
+(pull in memories connected via the entity graph) in addition to `as_of`.
 
 Interactive docs at `/docs`. All endpoints accept an optional `X-Tenant-ID`
 header for per-tenant isolation (single-tenant when omitted).
@@ -208,11 +212,13 @@ pytest          # runs against live Postgres + Redis; self-cleaning
 ## Roadmap
 
 Done: unified substrate + hybrid recall (Phase 1); the lifecycle engine —
-decay, consolidation, forgetting, supersession (Phase 2); and bitemporal
+decay, consolidation, forgetting, supersession (Phase 2); bitemporal
 belief-over-time + provenance traces + audit log + per-tenant Row-Level Security
-(Phase 3). Next: tenant partitioning, Apache AGE graph-hop recall, a scheduler
-for lifecycle, cross-encoder reranking, and LLM-based fact extraction + NLI
-contradiction detection. See `agent-db-plan.md`.
+(Phase 3); and the full follow-up set (Phase 4): cross-encoder **reranking**, a
+background lifecycle **scheduler**, relational **graph-hop recall**, pluggable
+**LLM fact extraction + contradiction detection** (offline default), and
+HASH **tenant partitioning** of the memory table. Future: cost/perf-driven
+scale-out (read replicas, a dedicated vector tier). See `agent-db-plan.md`.
 
 ## License
 
