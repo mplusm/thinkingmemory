@@ -32,7 +32,9 @@
 | `POST` | `/v1/recall` | **The primitive** — intent → packed, cited context |
 | `POST` | `/v1/forget` | Forget (`hard=false` soft-closes; `true` deletes) |
 | `GET`  | `/v1/memory/{id}` | Fetch one memory |
-| `GET`  | `/v1/trace/{id}` | Provenance — why a memory is known |
+| `GET`  | `/v1/trace/{id}` | Recursive provenance tree — why a memory is known |
+| `GET`  | `/v1/timeline/{agent_id}?as_of=…` | Bitemporal snapshot of belief at a time |
+| `GET`  | `/v1/audit` | Append-only operation log |
 | `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
 
 **Remember**
@@ -65,6 +67,13 @@ curl -X POST {base_url}/v1/recall -H 'Content-Type: application/json' -d '{
 Recall fuses vector + keyword + recency (RRF, salience-weighted) and packs the
 top results into `token_budget`. Each recall boosts the salience of what it
 surfaced. Working memory (Redis TTL scratchpad) remains under `/working`.
+
+**Bitemporal & audit.** Memories carry `valid_from`/`valid_to` (true-in-world)
+and `created_at`/`superseded_at` (learned/closed), so you can query the past:
+`POST /v1/recall` with `as_of` recalls against belief at that moment;
+`GET /v1/timeline/{agent_id}?as_of=…` returns the full snapshot;
+`GET /v1/trace/{id}` returns the recursive provenance tree; `GET /v1/audit`
+returns an append-only operation log.
 
 **Lifecycle.** Background maintenance makes recall improve over time:
 `POST /v1/maintenance/run {"agent_id": "...", "interval_days": 1}` runs decay

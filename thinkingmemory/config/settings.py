@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     log_level: str = "INFO"
+    # Append-only audit logging of memory operations (enterprise auditability).
+    audit_enabled: bool = True
 
 
 @lru_cache

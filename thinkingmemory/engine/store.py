@@ -16,6 +16,7 @@ from sqlmodel import select
 from thinkingmemory.core.database import get_session_context
 from thinkingmemory.core.embeddings import embedding_to_list
 from thinkingmemory.core.timeutils import utcnow
+from thinkingmemory.engine import audit
 from thinkingmemory.engine.embeddings import get_embedder
 from thinkingmemory.engine.models import Memory
 
@@ -108,7 +109,11 @@ def remember(
         session.add(item)
         session.commit()
         session.refresh(item)
-        return memory_to_dict(item)
+        result = memory_to_dict(item)
+
+    audit.record("remember", agent_id, tenant_id=tenant_id,
+                 target_id=result["id"], details={"mtype": mtype})
+    return result
 
 
 def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[dict]:
@@ -147,7 +152,14 @@ def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[di
         session.commit()
         for row in rows:
             session.refresh(row)
-        return [memory_to_dict(r) for r in rows]
+        results = [memory_to_dict(r) for r in rows]
+
+    by_agent: dict = {}
+    for r in results:
+        by_agent[r["agent_id"]] = by_agent.get(r["agent_id"], 0) + 1
+    for ag, count in by_agent.items():
+        audit.record("remember_batch", ag, tenant_id=tenant_id, details={"count": count})
+    return results
 
 
 def get(memory_id: int, tenant_id: Optional[str] = None) -> Optional[dict]:
@@ -165,6 +177,7 @@ def forget(memory_id: int, hard: bool = False, tenant_id: Optional[str] = None) 
         item = session.get(Memory, memory_id)
         if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
             return False
+        agent_id = item.agent_id
         if hard:
             session.delete(item)
         else:
@@ -172,25 +185,45 @@ def forget(memory_id: int, hard: bool = False, tenant_id: Optional[str] = None) 
             item.valid_to = now
             item.superseded_at = now
         session.commit()
-        return True
+
+    audit.record("forget", agent_id, tenant_id=tenant_id,
+                 target_id=memory_id, details={"hard": hard})
+    return True
 
 
-def trace(memory_id: int, tenant_id: Optional[str] = None) -> Optional[dict]:
-    """Return a memory's provenance and the memories it was derived from."""
+def _trace_node(session, memory_id, tenant_id, depth, seen) -> Optional[dict]:
+    """Recursively expand a memory's provenance chain into a tree."""
+    if memory_id in seen or depth < 0:
+        return None
+    seen.add(memory_id)
+    item = session.get(Memory, memory_id)
+    if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
+        return None
+    prov = item.provenance or {}
+    node = {
+        "id": item.id,
+        "mtype": item.mtype,
+        "text": item.text,
+        "provenance": prov,
+        "derived_from": [],
+        "superseded_by": None,
+    }
+    if depth > 0:
+        for src_id in prov.get("derived_from", []):
+            child = _trace_node(session, src_id, tenant_id, depth - 1, seen)
+            if child:
+                node["derived_from"].append(child)
+        if prov.get("superseded_by"):
+            node["superseded_by"] = _trace_node(
+                session, prov["superseded_by"], tenant_id, depth - 1, seen
+            )
+    return node
+
+
+def trace(memory_id: int, tenant_id: Optional[str] = None, depth: int = 3) -> Optional[dict]:
+    """Why-do-I-know-this: the recursive provenance tree for a memory."""
     with get_session_context() as session:
-        item = session.get(Memory, memory_id)
-        if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
-            return None
-        derived_from = (item.provenance or {}).get("derived_from", [])
-        sources = []
-        if derived_from:
-            stmt = select(Memory).where(Memory.id.in_(derived_from))
-            sources = [memory_to_dict(s) for s in session.exec(stmt).all()]
-        return {
-            "id": item.id,
-            "provenance": item.provenance,
-            "derived_from": sources,
-        }
+        return _trace_node(session, memory_id, tenant_id, depth, set())
 
 
 __all__ = [

@@ -18,6 +18,7 @@ than naively dumping every memory — the product's ROI metric.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func
@@ -25,8 +26,10 @@ from sqlmodel import select
 
 from thinkingmemory.core.database import get_session_context
 from thinkingmemory.core.timeutils import utcnow
+from thinkingmemory.engine import audit
 from thinkingmemory.engine.embeddings import embed_one
 from thinkingmemory.engine.models import Memory
+from thinkingmemory.engine.temporal import temporal_conditions
 from thinkingmemory.engine.tokens import count_tokens
 
 # RRF dampening constant — larger = flatter contribution from rank position.
@@ -40,9 +43,9 @@ _SALIENCE_WEIGHT = 0.15
 _RECALL_SALIENCE_BUMP = 0.1
 
 
-def _base_conditions(agent_id, tenant_id, scopes, mtypes):
-    """Shared WHERE conditions: agent, tenant, currently-valid, scope, type."""
-    conds = [Memory.agent_id == agent_id, Memory.valid_to.is_(None)]
+def _base_conditions(agent_id, tenant_id, scopes, mtypes, as_of=None):
+    """Shared WHERE conditions: agent, tenant, belief-as-of, scope, type."""
+    conds = [Memory.agent_id == agent_id, *temporal_conditions(as_of)]
     if tenant_id is not None:
         conds.append(Memory.tenant_id == tenant_id)
     if scopes:
@@ -70,13 +73,18 @@ def recall(
     token_budget: int = 4000,
     k: int = 20,
     candidate_limit: int = 50,
+    as_of: Optional[datetime] = None,
     track: bool = True,
 ) -> dict:
-    """Retrieve a packed, ranked, cited context window for an intent."""
+    """Retrieve a packed, ranked, cited context window for an intent.
+
+    Pass ``as_of`` to recall against what the agent believed at a past moment
+    (bitemporal recall); omit it for the current state.
+    """
     qvec = embed_one(intent)
 
     with get_session_context() as session:
-        base = _base_conditions(agent_id, tenant_id, scopes, mtypes)
+        base = _base_conditions(agent_id, tenant_id, scopes, mtypes, as_of)
 
         # --- Candidate generation (three retrievers) ---
         vec_ids = list(
@@ -169,6 +177,18 @@ def recall(
                 mem.last_recalled_at = now
                 mem.salience = (mem.salience or 0.0) + _RECALL_SALIENCE_BUMP
             session.commit()
+
+        audit.record(
+            "recall",
+            agent_id,
+            tenant_id=tenant_id,
+            details={
+                "intent": intent,
+                "n_items": len(items),
+                "tokens_used": tokens_used,
+                "tokens_saved_vs_dump": max(0, dump_tokens - tokens_used),
+            },
+        )
 
         return {
             "intent": intent,
