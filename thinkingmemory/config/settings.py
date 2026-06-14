@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # (decay/consolidate/forget/...) for every active agent. Off by default.
     scheduler_enabled: bool = False
     scheduler_interval_minutes: int = 1440  # daily
+    # Number of HASH partitions for the `memory` table (by tenant_id). Fresh
+    # installs create the table partitioned; existing DBs convert via
+    # scripts/partition_memory.py.
+    memory_partitions: int = 8
 
 
 @lru_cache

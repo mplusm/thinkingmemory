@@ -26,8 +26,13 @@ class Memory(SQLModel, table=True):
     class Config:
         arbitrary_types_allowed = True
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: str = Field(default="default", index=True)
+    # Composite PK (id, tenant_id): a hash-partitioned table's primary key must
+    # include the partition key. `id` stays autoincrement (identity) — this must
+    # be stated explicitly for composite PKs so inserts return the generated id.
+    id: Optional[int] = Field(
+        default=None, primary_key=True, sa_column_kwargs={"autoincrement": True}
+    )
+    tenant_id: str = Field(default="default", primary_key=True, index=True)
     agent_id: str = Field(index=True)
 
     # Policy tags (not separate tables)

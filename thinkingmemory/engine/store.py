@@ -162,20 +162,26 @@ def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[di
     return results
 
 
+def _fetch(session, memory_id: int, tenant_id: Optional[str]) -> Optional[Memory]:
+    """Fetch one Memory by id (composite PK means we can't use session.get(id))."""
+    stmt = select(Memory).where(Memory.id == memory_id)
+    if tenant_id is not None:
+        stmt = stmt.where(Memory.tenant_id == tenant_id)
+    return session.exec(stmt).first()
+
+
 def get(memory_id: int, tenant_id: Optional[str] = None) -> Optional[dict]:
     """Fetch a single memory by id (tenant-scoped if tenant_id given)."""
     with get_session_context(tenant_id) as session:
-        item = session.get(Memory, memory_id)
-        if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
-            return None
-        return memory_to_dict(item)
+        item = _fetch(session, memory_id, tenant_id)
+        return memory_to_dict(item) if item is not None else None
 
 
 def forget(memory_id: int, hard: bool = False, tenant_id: Optional[str] = None) -> bool:
     """Forget a memory. Soft (default) closes its bitemporal window; hard deletes."""
     with get_session_context(tenant_id) as session:
-        item = session.get(Memory, memory_id)
-        if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
+        item = _fetch(session, memory_id, tenant_id)
+        if item is None:
             return False
         agent_id = item.agent_id
         if hard:
@@ -196,8 +202,8 @@ def _trace_node(session, memory_id, tenant_id, depth, seen) -> Optional[dict]:
     if memory_id in seen or depth < 0:
         return None
     seen.add(memory_id)
-    item = session.get(Memory, memory_id)
-    if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
+    item = _fetch(session, memory_id, tenant_id)
+    if item is None:
         return None
     prov = item.provenance or {}
     node = {
