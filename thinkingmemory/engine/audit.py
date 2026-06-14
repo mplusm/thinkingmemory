@@ -32,7 +32,7 @@ def record(
     if not get_settings().audit_enabled:
         return
     try:
-        with get_session_context() as session:
+        with get_session_context(tenant_id) as session:
             session.add(
                 AuditLog(
                     action=action,
@@ -54,7 +54,7 @@ def query(
     limit: int = 50,
 ) -> list[dict]:
     """Return recent audit entries, newest first."""
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         stmt = select(AuditLog)
         if agent_id is not None:
             stmt = stmt.where(AuditLog.agent_id == agent_id)
