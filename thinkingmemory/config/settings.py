@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # level so pgvector can build HNSW indexes for fast similarity search.
     embedding_dim: int = 384
 
+    # Cross-encoder reranking of recall candidates (local, CPU). Off by default
+    # (adds latency + a model download); enable for higher recall precision.
+    rerank_enabled: bool = False
+    rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates: int = 30
+
     # Application settings
     app_name: str = "ThinkingMemory API"
     app_version: str = "0.1.0"

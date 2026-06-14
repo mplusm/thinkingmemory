@@ -35,6 +35,7 @@ class RecallRequest(BaseModel):
     token_budget: int = Field(default=4000, gt=0)
     k: int = Field(default=20, gt=0)
     as_of: Optional[datetime] = None   # recall against belief at a past moment
+    rerank: Optional[bool] = None      # cross-encoder rerank (defaults to setting)
 
 
 class ForgetRequest(BaseModel):
