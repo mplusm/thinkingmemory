@@ -1,8 +1,8 @@
 # ThinkingMemory
 
 **The memory database agents recall from.** Point your agent at one endpoint; it
-stores experience and gets back the *right* context — hybrid-retrieved, ranked,
-and packed to a token budget — with recall that improves as the agent runs.
+stores experience and gets back the *right* context - hybrid-retrieved, ranked,
+and packed to a token budget - with recall that improves as the agent runs.
 
 ThinkingMemory is agent-agnostic (works with any framework or LLM) and runs on
 Postgres + pgvector with a local, offline embedding model by default.
@@ -13,13 +13,13 @@ A raw vector store gives you nearest-neighbours. An agent needs the *useful*
 context for what it's doing right now, within a token budget. ThinkingMemory's
 query primitive is **`recall`**:
 
-- **Hybrid retrieval** — vector similarity + keyword (Postgres full-text) +
+- **Hybrid retrieval** - vector similarity + keyword (Postgres full-text) +
   recency, fused with Reciprocal Rank Fusion and weighted by salience.
-- **Token-budget packing** — returns a ready-to-use, deduped context string with
+- **Token-budget packing** - returns a ready-to-use, deduped context string with
   `[n]` citations, not a pile of rows.
-- **Lifecycle** — each recall boosts the salience of what it surfaced, so useful
+- **Lifecycle** - each recall boosts the salience of what it surfaced, so useful
   memories rise over time.
-- **Server-side embeddings** — you send text, not vectors.
+- **Server-side embeddings** - you send text, not vectors.
 
 One unified `Memory` substrate replaces the old four-layer split; the "layer"
 (episodic / semantic / procedural / working) is now just a `mtype` tag on a row.
@@ -108,10 +108,10 @@ curl -X POST localhost:8091/v1/recall -H 'Content-Type: application/json' -d '{
 |--------|----------|---------|
 | `POST` | `/v1/remember` | Store a memory (embedded server-side) |
 | `POST` | `/v1/remember/batch` | Store many in one batched embed call |
-| `POST` | `/v1/recall` | **The primitive** — intent → packed, cited context |
+| `POST` | `/v1/recall` | **The primitive** - intent → packed, cited context |
 | `POST` | `/v1/forget` | Forget a memory (soft by default; `hard` deletes) |
 | `GET`  | `/v1/memory/{id}` | Fetch one memory |
-| `GET`  | `/v1/trace/{id}` | Recursive provenance tree — why a memory is known |
+| `GET`  | `/v1/trace/{id}` | Recursive provenance tree - why a memory is known |
 | `GET`  | `/v1/timeline/{agent}?as_of=…` | What the agent believed at a point in time |
 | `GET`  | `/v1/audit` | Append-only log of memory operations |
 | `POST` | `/v1/maintenance/run` | Run the lifecycle cycle for an agent |
@@ -142,18 +142,18 @@ default tenant with `THINKINGMEMORY_TENANT_ID`.
 Background maintenance is what makes this a memory *database*, not a vector
 store:
 
-- **decay** — salience fades by `e^(-decay_rate·Δt)` (per-`mtype` defaults:
+- **decay** - salience fades by `e^(-decay_rate·Δt)` (per-`mtype` defaults:
   episodic fades fast, semantic/procedural slowly); recall counteracts it, so
   useful memories stay high and stale ones sink.
-- **extract** — durable facts are pulled from recent episodic memories into
+- **extract** - durable facts are pulled from recent episodic memories into
   semantic ones (offline heuristic, or an LLM when `LLM_PROVIDER` is set),
   linked to their source via provenance.
-- **consolidate** ("sleep") — clusters of similar episodic memories are
+- **consolidate** ("sleep") - clusters of similar episodic memories are
   summarized into one semantic memory, linked to its sources via provenance.
-- **supersede** — near-duplicate semantic memories collapse to the newest.
-- **resolve contradictions** — conflicting semantic memories (negation/NLI) are
+- **supersede** - near-duplicate semantic memories collapse to the newest.
+- **resolve contradictions** - conflicting semantic memories (negation/NLI) are
   detected and the older one is closed, linked to the survivor.
-- **forget / prune** — low-salience, long-idle memories are soft-closed
+- **forget / prune** - low-salience, long-idle memories are soft-closed
   (recoverable), then hard-pruned after a grace period.
 
 Run it on demand (`POST /v1/maintenance/run`), via cron
@@ -170,15 +170,15 @@ Every memory records when it was *true* (`valid_from`/`valid_to`) and when we
 *learned/closed* it (`created_at`/`superseded_at`), so you can ask what an agent
 believed in the past and prove how it knows things:
 
-- **`recall` with `as_of`** — retrieve against belief at a past moment.
-- **`GET /v1/timeline/{agent}?as_of=…`** — a snapshot of everything believed then.
-- **`GET /v1/trace/{id}`** — the recursive provenance tree (derived-from /
+- **`recall` with `as_of`** - retrieve against belief at a past moment.
+- **`GET /v1/timeline/{agent}?as_of=…`** - a snapshot of everything believed then.
+- **`GET /v1/trace/{id}`** - the recursive provenance tree (derived-from /
   superseded-by) behind a memory.
-- **`GET /v1/audit`** — append-only log of remember/recall/forget/maintenance
+- **`GET /v1/audit`** - append-only log of remember/recall/forget/maintenance
   (toggle with `audit_enabled`).
-- **Row-Level Security** — with `RLS_ENABLED=true` (run `scripts/enable_rls.py`
+- **Row-Level Security** - with `RLS_ENABLED=true` (run `scripts/enable_rls.py`
   once), Postgres itself restricts every query to the request's tenant via a
-  per-session `app.tenant_id` GUC — defense-in-depth beneath app filtering. The
+  per-session `app.tenant_id` GUC - defense-in-depth beneath app filtering. The
   policy allows access when unset, so single-tenant and admin/maintenance keep
   working.
 
@@ -204,7 +204,7 @@ the ROI demo.
 | `EMBEDDING_PROVIDER` | `local` or `openai` | `local` |
 | `EMBEDDING_MODEL` | Embedding model name | `BAAI/bge-small-en-v1.5` |
 | `EMBEDDING_DIM` | Vector dimension (must match the model) | `384` |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Keys for OpenAI/Anthropic backends | — |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Keys for OpenAI/Anthropic backends | - |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `AUDIT_ENABLED` | Append-only audit logging | `true` |
 | `RLS_ENABLED` | Per-tenant Postgres Row-Level Security | `false` |
@@ -222,7 +222,7 @@ pytest          # runs against live Postgres + Redis; self-cleaning
 
 ## Roadmap
 
-Done: unified substrate + hybrid recall (Phase 1); the lifecycle engine —
+Done: unified substrate + hybrid recall (Phase 1); the lifecycle engine -
 decay, consolidation, forgetting, supersession (Phase 2); bitemporal
 belief-over-time + provenance traces + audit log + per-tenant Row-Level Security
 (Phase 3); and the full follow-up set (Phase 4): cross-encoder **reranking**, a
@@ -233,4 +233,4 @@ scale-out (read replicas, a dedicated vector tier). See `agent-db-plan.md`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
