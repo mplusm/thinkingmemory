@@ -37,7 +37,7 @@ from thinkingmemory.engine.tokens import count_tokens
 _RRF_K = 60
 # Per-retriever weights. Relevance signals (vector, keyword) outrank pure
 # recency so that recent-but-irrelevant memories don't crowd out good matches.
-_SOURCE_WEIGHTS = {"vector": 1.0, "keyword": 1.0, "recency": 0.5}
+_SOURCE_WEIGHTS = {"vector": 1.0, "keyword": 1.0, "recency": 0.5, "graph": 0.8}
 # How strongly salience boosts the fused score.
 _SALIENCE_WEIGHT = 0.15
 # Salience increment applied to memories each time they are recalled.
@@ -76,6 +76,7 @@ def recall(
     candidate_limit: int = 50,
     as_of: Optional[datetime] = None,
     rerank: Optional[bool] = None,
+    graph_hops: int = 0,
     track: bool = True,
 ) -> dict:
     """Retrieve a packed, ranked, cited context window for an intent.
@@ -118,21 +119,35 @@ def recall(
             ).all()
         )
 
+        # --- Graph-hop expansion: pull in neighbors of the strongest hits ---
+        graph_ids: list[int] = []
+        if graph_hops and graph_hops > 0:
+            from thinkingmemory.engine.graph import neighbors as graph_neighbors
+
+            seeds = list(dict.fromkeys(vec_ids[:10] + kw_ids[:10]))
+            nb = graph_neighbors(seeds, depth=graph_hops, tenant_id=tenant_id)
+            graph_ids = [mid for mid, _hop in sorted(nb.items(), key=lambda x: x[1])]
+
         # --- Fusion (RRF + salience) ---
         scores: dict[int, float] = {}
         why: dict[int, set] = {}
         _rrf_accumulate(scores, why, vec_ids, "vector")
         _rrf_accumulate(scores, why, kw_ids, "keyword")
         _rrf_accumulate(scores, why, rec_ids, "recency")
+        _rrf_accumulate(scores, why, graph_ids, "graph")
 
         if not scores:
             return _empty_result(session, base)
 
-        candidate_ids = list(scores.keys())
+        # Fetch full rows, re-applying base so graph neighbors that belong to a
+        # different agent/tenant or are no longer valid are dropped.
         rows = {
             m.id: m
-            for m in session.exec(select(Memory).where(Memory.id.in_(candidate_ids))).all()
+            for m in session.exec(
+                select(Memory).where(Memory.id.in_(list(scores.keys())), *base)
+            ).all()
         }
+        candidate_ids = list(rows.keys())
         for mem_id, mem in rows.items():
             scores[mem_id] *= 1.0 + _SALIENCE_WEIGHT * (mem.salience or 0.0)
 
