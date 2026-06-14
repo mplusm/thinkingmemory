@@ -133,25 +133,32 @@ pip install -e ".[mcp]"
 thinkingmemory-mcp          # stdio
 ```
 
-Tools: `remember`, `recall` (intent → packed context), `remember_fact`,
+Tools: `remember`, `recall` (intent → packed context), `link_memories`, `remember_fact`,
 `remember_procedure`, `get_memory`, `forget`, and working-memory tools. Set a
 default tenant with `THINKINGMEMORY_TENANT_ID`.
 
 ## Lifecycle (recall that improves over time)
 
 Background maintenance is what makes this a memory *database*, not a vector
-store. Run it on a schedule (`scripts/run_lifecycle.py --all`, or
-`POST /v1/maintenance/run`):
+store:
 
 - **decay** — salience fades by `e^(-decay_rate·Δt)` (per-`mtype` defaults:
   episodic fades fast, semantic/procedural slowly); recall counteracts it, so
   useful memories stay high and stale ones sink.
+- **extract** — durable facts are pulled from recent episodic memories into
+  semantic ones (offline heuristic, or an LLM when `LLM_PROVIDER` is set),
+  linked to their source via provenance.
 - **consolidate** ("sleep") — clusters of similar episodic memories are
   summarized into one semantic memory, linked to its sources via provenance.
-- **forget** — low-salience, long-idle memories are soft-closed (recoverable),
-  then hard-pruned after a grace period.
-- **supersede** — near-duplicate semantic memories collapse to the newest
-  (contradiction-lite), older ones closed and linked.
+- **supersede** — near-duplicate semantic memories collapse to the newest.
+- **resolve contradictions** — conflicting semantic memories (negation/NLI) are
+  detected and the older one is closed, linked to the survivor.
+- **forget / prune** — low-salience, long-idle memories are soft-closed
+  (recoverable), then hard-pruned after a grace period.
+
+Run it on demand (`POST /v1/maintenance/run`), via cron
+(`scripts/run_lifecycle.py --all`), or with the built-in scheduler
+(`SCHEDULER_ENABLED=true`).
 
 ```bash
 python scripts/run_lifecycle.py --agent agent-1 --interval-days 1
@@ -197,10 +204,14 @@ the ROI demo.
 | `EMBEDDING_PROVIDER` | `local` or `openai` | `local` |
 | `EMBEDDING_MODEL` | Embedding model name | `BAAI/bge-small-en-v1.5` |
 | `EMBEDDING_DIM` | Vector dimension (must match the model) | `384` |
-| `OPENAI_API_KEY` | Required if `EMBEDDING_PROVIDER=openai` | — |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Keys for OpenAI/Anthropic backends | — |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `AUDIT_ENABLED` | Append-only audit logging | `true` |
 | `RLS_ENABLED` | Per-tenant Postgres Row-Level Security | `false` |
+| `RERANK_ENABLED` / `RERANK_MODEL` | Default-on cross-encoder rerank + model | `false` / `ms-marco-MiniLM-L-6-v2` |
+| `SCHEDULER_ENABLED` / `SCHEDULER_INTERVAL_MINUTES` | Background lifecycle scheduler | `false` / `1440` |
+| `MEMORY_PARTITIONS` | HASH partitions for the `memory` table (fresh installs) | `8` |
+| `LLM_PROVIDER` / `LLM_MODEL` | LLM for extraction/summaries/NLI (`none`/`openai`/`anthropic`) | `none` |
 
 ## Testing
 
