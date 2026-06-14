@@ -165,6 +165,11 @@ believed in the past and prove how it knows things:
   superseded-by) behind a memory.
 - **`GET /v1/audit`** — append-only log of remember/recall/forget/maintenance
   (toggle with `audit_enabled`).
+- **Row-Level Security** — with `RLS_ENABLED=true` (run `scripts/enable_rls.py`
+  once), Postgres itself restricts every query to the request's tenant via a
+  per-session `app.tenant_id` GUC — defense-in-depth beneath app filtering. The
+  policy allows access when unset, so single-tenant and admin/maintenance keep
+  working.
 
 ## Evaluation harness
 
@@ -190,6 +195,8 @@ the ROI demo.
 | `EMBEDDING_DIM` | Vector dimension (must match the model) | `384` |
 | `OPENAI_API_KEY` | Required if `EMBEDDING_PROVIDER=openai` | — |
 | `LOG_LEVEL` | Logging level | `INFO` |
+| `AUDIT_ENABLED` | Append-only audit logging | `true` |
+| `RLS_ENABLED` | Per-tenant Postgres Row-Level Security | `false` |
 
 ## Testing
 
@@ -202,9 +209,9 @@ pytest          # runs against live Postgres + Redis; self-cleaning
 
 Done: unified substrate + hybrid recall (Phase 1); the lifecycle engine —
 decay, consolidation, forgetting, supersession (Phase 2); and bitemporal
-belief-over-time + provenance traces + audit log (Phase 3). Next: per-tenant
-Postgres RLS + partitioning, Apache AGE graph-hop recall, a scheduler for
-lifecycle, cross-encoder reranking, and LLM-based fact extraction + NLI
+belief-over-time + provenance traces + audit log + per-tenant Row-Level Security
+(Phase 3). Next: tenant partitioning, Apache AGE graph-hop recall, a scheduler
+for lifecycle, cross-encoder reranking, and LLM-based fact extraction + NLI
 contradiction detection. See `agent-db-plan.md`.
 
 ## License
