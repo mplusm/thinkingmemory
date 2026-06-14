@@ -203,18 +203,66 @@ def get_session() -> Generator[Session, None, None]:
 
 
 @contextmanager
-def get_session_context() -> Generator[Session, None, None]:
+def get_session_context(tenant_id=None) -> Generator[Session, None, None]:
     """
     Context manager for getting a database session.
 
     Usage in non-FastAPI code (scripts, CRUD functions):
-        with get_session_context() as session:
+        with get_session_context(tenant_id) as session:
             session.exec(...)
 
-    This replaces the pattern: with next(get_session()) as session
+    When ``tenant_id`` is given and Row-Level Security is enabled, the session's
+    ``app.tenant_id`` GUC is set (transaction-local) so Postgres RLS policies
+    scope every statement to that tenant.
     """
     with Session(get_engine()) as session:
+        if tenant_id is not None and get_settings().rls_enabled:
+            session.execute(
+                text("SELECT set_config('app.tenant_id', :tid, true)"),
+                {"tid": str(tenant_id)},
+            )
         yield session
+
+
+# Tables protected by Row-Level Security and the GUC their policy reads.
+_RLS_TABLES = ["memory", "memory_audit"]
+
+
+def enable_rls() -> None:
+    """Enable per-tenant Row-Level Security on the memory tables.
+
+    Uses FORCE so the policy applies even to the table owner, with a policy that
+    allows access when ``app.tenant_id`` is unset (single-tenant / admin /
+    maintenance) and otherwise restricts rows to the matching tenant. Idempotent.
+    """
+    engine = get_engine()
+    with engine.begin() as conn:
+        for table in _RLS_TABLES:
+            conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+            conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
+            conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation ON {table}"))
+            # NULLIF handles both "never set" (NULL) and "reset after a
+            # transaction-local SET" (empty string) as the single-tenant/admin
+            # "allow all" case; otherwise rows are restricted to the tenant.
+            conn.execute(
+                text(
+                    f"CREATE POLICY tenant_isolation ON {table} USING ("
+                    "nullif(current_setting('app.tenant_id', true), '') IS NULL "
+                    "OR tenant_id = current_setting('app.tenant_id', true))"
+                )
+            )
+    logger.info("Row-Level Security enabled on %s", ", ".join(_RLS_TABLES))
+
+
+def disable_rls() -> None:
+    """Drop the RLS policies and disable RLS on the memory tables."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        for table in _RLS_TABLES:
+            conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation ON {table}"))
+            conn.execute(text(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
+            conn.execute(text(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))
+    logger.info("Row-Level Security disabled on %s", ", ".join(_RLS_TABLES))
 
 
 __all__ = [
@@ -224,6 +272,8 @@ __all__ = [
     "create_memory_indexes",
     "create_vector_indexes",
     "migrate_vector_columns",
+    "enable_rls",
+    "disable_rls",
     "get_session",
     "get_session_context",
 ]

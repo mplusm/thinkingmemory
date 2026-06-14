@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Append-only audit logging of memory operations (enterprise auditability).
     audit_enabled: bool = True
+    # Postgres Row-Level Security: when on, the DB enforces tenant isolation via
+    # a per-session app.tenant_id GUC (defense-in-depth beneath app filtering).
+    # Enable for multi-tenant deployments; run scripts/enable_rls.py once.
+    rls_enabled: bool = False
 
 
 @lru_cache

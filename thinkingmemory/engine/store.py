@@ -105,7 +105,7 @@ def remember(
     if tenant_id is not None:
         item.tenant_id = tenant_id
 
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         session.add(item)
         session.commit()
         session.refresh(item)
@@ -147,7 +147,7 @@ def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[di
             row.tenant_id = tid
         rows.append(row)
 
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         session.add_all(rows)
         session.commit()
         for row in rows:
@@ -164,7 +164,7 @@ def remember_many(items: list[dict], tenant_id: Optional[str] = None) -> list[di
 
 def get(memory_id: int, tenant_id: Optional[str] = None) -> Optional[dict]:
     """Fetch a single memory by id (tenant-scoped if tenant_id given)."""
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         item = session.get(Memory, memory_id)
         if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
             return None
@@ -173,7 +173,7 @@ def get(memory_id: int, tenant_id: Optional[str] = None) -> Optional[dict]:
 
 def forget(memory_id: int, hard: bool = False, tenant_id: Optional[str] = None) -> bool:
     """Forget a memory. Soft (default) closes its bitemporal window; hard deletes."""
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         item = session.get(Memory, memory_id)
         if item is None or (tenant_id is not None and item.tenant_id != tenant_id):
             return False
@@ -222,7 +222,7 @@ def _trace_node(session, memory_id, tenant_id, depth, seen) -> Optional[dict]:
 
 def trace(memory_id: int, tenant_id: Optional[str] = None, depth: int = 3) -> Optional[dict]:
     """Why-do-I-know-this: the recursive provenance tree for a memory."""
-    with get_session_context() as session:
+    with get_session_context(tenant_id) as session:
         return _trace_node(session, memory_id, tenant_id, depth, set())
 
 
