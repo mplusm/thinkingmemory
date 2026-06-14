@@ -31,11 +31,16 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # Embedding settings
-    # Dimension of stored embedding vectors. This MUST match the model used to
-    # generate embeddings (e.g. 1536 for OpenAI text-embedding-3-small,
-    # 3072 for text-embedding-3-large). It is fixed at the column level so that
-    # pgvector can build HNSW indexes for fast similarity search.
-    embedding_dim: int = 1536
+    # The platform generates embeddings server-side via a pluggable provider.
+    #   - "local"  : fastembed + BAAI/bge-small-en-v1.5 (384-dim, CPU, offline)
+    #   - "openai" : text-embedding-3-small (1536-dim, requires OPENAI_API_KEY)
+    embedding_provider: str = "local"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    openai_api_key: str = ""
+    # Dimension of stored embedding vectors. MUST match the provider/model above
+    # (384 for bge-small, 1536 for text-embedding-3-small). Fixed at the column
+    # level so pgvector can build HNSW indexes for fast similarity search.
+    embedding_dim: int = 384
 
     # Application settings
     app_name: str = "ThinkingMemory API"

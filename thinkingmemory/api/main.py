@@ -24,12 +24,8 @@ from fastapi import FastAPI
 from thinkingmemory.config.settings import get_settings
 from thinkingmemory.core.database import init_db
 from thinkingmemory.api.errors import configure_logging, install_error_handlers
-from thinkingmemory.api.routers import (
-    episodic_router,
-    semantic_router,
-    procedural_router,
-    working_router,
-)
+from thinkingmemory.api.routers import working_router
+from thinkingmemory.engine.router import router as memory_db_router
 
 
 @asynccontextmanager
@@ -90,16 +86,16 @@ def create_app(
 
 def include_routers(app: FastAPI) -> None:
     """
-    Include all memory routers in the application.
+    Include the memory routers in the application.
 
-    Call this after adding any middleware to ensure proper request flow.
+    The unified memory database lives under ``/v1`` (remember/recall/forget);
+    working memory remains a separate Redis-backed TTL scratchpad under
+    ``/working``. Call this after adding any middleware.
 
     Args:
         app: FastAPI application instance
     """
-    app.include_router(episodic_router)
-    app.include_router(semantic_router)
-    app.include_router(procedural_router)
+    app.include_router(memory_db_router)
     app.include_router(working_router)
 
 
