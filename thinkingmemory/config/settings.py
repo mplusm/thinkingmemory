@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     embedding_provider: str = "local"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     openai_api_key: str = ""
+    anthropic_api_key: str = ""
+
+    # Optional LLM for fact extraction, consolidation summaries, and
+    # contradiction (NLI) judgments. "none" uses offline heuristics (no key
+    # needed); "openai"/"anthropic" use the API when a key is set.
+    llm_provider: str = "none"
+    llm_model: str = ""
     # Dimension of stored embedding vectors. MUST match the provider/model above
     # (384 for bge-small, 1536 for text-embedding-3-small). Fixed at the column
     # level so pgvector can build HNSW indexes for fast similarity search.
