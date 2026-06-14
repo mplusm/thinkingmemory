@@ -14,4 +14,15 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-__all__ = ["utcnow"]
+def to_naive_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to naive UTC so it compares with the DB columns.
+
+    Timezone-aware inputs (e.g. an API caller's ISO timestamp with offset) are
+    converted to UTC and stripped of tzinfo; naive inputs pass through.
+    """
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+__all__ = ["utcnow", "to_naive_utc"]

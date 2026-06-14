@@ -272,13 +272,17 @@ def run_all(
     interval_days: float = 1.0,
 ) -> dict:
     """Run the full maintenance cycle for an agent and return per-pass counts."""
-    return {
+    from thinkingmemory.engine import audit
+
+    counts = {
         "decayed": apply_decay(interval_days, agent_id, tenant_id),
         "consolidated": consolidate(agent_id, tenant_id),
         "superseded": resolve_duplicates(agent_id, tenant_id),
         "forgotten": forget_decayed(agent_id, tenant_id),
         "pruned": prune_superseded(agent_id, tenant_id),
     }
+    audit.record("maintenance", agent_id, tenant_id=tenant_id, details=counts)
+    return counts
 
 
 __all__ = [
