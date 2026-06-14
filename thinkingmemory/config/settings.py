@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # a per-session app.tenant_id GUC (defense-in-depth beneath app filtering).
     # Enable for multi-tenant deployments; run scripts/enable_rls.py once.
     rls_enabled: bool = False
+    # Background lifecycle scheduler: periodically runs the maintenance cycle
+    # (decay/consolidate/forget/...) for every active agent. Off by default.
+    scheduler_enabled: bool = False
+    scheduler_interval_minutes: int = 1440  # daily
 
 
 @lru_cache
