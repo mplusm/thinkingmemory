@@ -24,6 +24,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import select
 
+from thinkingmemory.config.settings import get_settings
 from thinkingmemory.core.database import get_session_context
 from thinkingmemory.core.timeutils import utcnow
 from thinkingmemory.engine import audit
@@ -74,6 +75,7 @@ def recall(
     k: int = 20,
     candidate_limit: int = 50,
     as_of: Optional[datetime] = None,
+    rerank: Optional[bool] = None,
     track: bool = True,
 ) -> dict:
     """Retrieve a packed, ranked, cited context window for an intent.
@@ -135,6 +137,20 @@ def recall(
             scores[mem_id] *= 1.0 + _SALIENCE_WEIGHT * (mem.salience or 0.0)
 
         ranked = sorted(candidate_ids, key=lambda i: scores[i], reverse=True)
+
+        # --- Optional cross-encoder rerank of the top candidates ---
+        settings = get_settings()
+        do_rerank = settings.rerank_enabled if rerank is None else rerank
+        if do_rerank and ranked:
+            from thinkingmemory.engine.rerank import get_reranker
+
+            head = ranked[: settings.rerank_candidates]
+            scores_rr = get_reranker().rerank(intent, [rows[i].text for i in head])
+            order = sorted(range(len(head)), key=lambda j: scores_rr[j], reverse=True)
+            head_sorted = [head[j] for j in order]
+            for i in head_sorted:
+                why[i].add("rerank")
+            ranked = head_sorted + ranked[settings.rerank_candidates :]
 
         # --- Token-budget packing ---
         items, parts, tokens_used = [], [], 0
