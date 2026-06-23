@@ -169,6 +169,21 @@ def clear_working_memory(
     return 0
 
 
+def clear_tenant_working_memory(tenant_id: str) -> int:
+    """Clear *all* working memory for an entire tenant (every agent).
+
+    Used by tenant-level erasure so a "delete all my data" request also wipes
+    the Redis scratchpad. Returns the number of keys deleted.
+    """
+    if not tenant_id:
+        raise ValueError("tenant_id is required for tenant-wide clear")
+    client = _get_client()
+    keys = list(client.scan_iter(match=f"{tenant_id}:*", count=500))
+    if keys:
+        return client.delete(*keys)
+    return 0
+
+
 def update_working_memory(
     agent_id: str,
     key: str,

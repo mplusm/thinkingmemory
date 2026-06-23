@@ -140,6 +140,28 @@ async def forget_endpoint(
     return {"forgotten": request.memory_id, "hard": request.hard}
 
 
+@router.delete("/forget/agent/{agent_id}")
+async def forget_agent_endpoint(
+    agent_id: str,
+    hard: bool = False,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Forget all memory for one agent (soft by default; hard deletes rows,
+    erases the agent's graph edges, and wipes its Redis working memory).
+    Idempotent: returns forgotten=0 when the agent has nothing stored."""
+    return store.forget_agent(agent_id, hard=hard, tenant_id=tenant_id)
+
+
+@router.get("/export/agent/{agent_id}")
+async def export_agent_endpoint(
+    agent_id: str,
+    tenant_id: Optional[str] = Depends(get_tenant_id),
+):
+    """Full export of everything stored for one agent — memories (including
+    closed rows), graph edges, and working memory (GDPR access/portability)."""
+    return store.export_agent(agent_id, tenant_id=tenant_id)
+
+
 @router.post("/link")
 async def link_endpoint(
     request: LinkRequest,
